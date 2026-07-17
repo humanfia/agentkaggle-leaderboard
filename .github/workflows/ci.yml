@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+env:
+  HUGO_VERSION: "0.164.0"
+  HUGO_SHA256: "d9c8b17285ea4ec004d9f814273ea910f2051ce02c284993fd1f91ba455ae50d"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+
+      - name: Install locked Python dependencies
+        run: uv sync --locked
+
+      - name: Run unit tests
+        run: uv run python -m unittest discover -v
+
+      - name: Install pinned Hugo
+        shell: bash
+        run: |
+          set -euo pipefail
+          HUGO_ARCHIVE="hugo_${HUGO_VERSION}_linux-amd64.tar.gz"
+          curl --fail --silent --show-error --location \
+            --output "${RUNNER_TEMP}/${HUGO_ARCHIVE}" \
+            "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/${HUGO_ARCHIVE}"
+          echo "${HUGO_SHA256}  ${RUNNER_TEMP}/${HUGO_ARCHIVE}" | sha256sum --check --strict
+          tar --extract --gzip --file "${RUNNER_TEMP}/${HUGO_ARCHIVE}" --directory "${RUNNER_TEMP}" hugo
+          echo "${RUNNER_TEMP}" >> "${GITHUB_PATH}"
+
+      - name: Build the synthetic fixture site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p data
+          cp tests/fixtures/leaderboard.json data/leaderboard.json
+          hugo --gc --minify --destination public
+
+      - name: Check public artifact safety
+        run: uv run python scripts/check_public_artifact.py public

@@ -1,0 +1,19 @@
+baseURL = "/"
+locale = "zh-CN"
+defaultContentLanguage = "zh-CN"
+title = "Kaggle Team Radar"
+disableKinds = ["taxonomy", "term", "RSS", "sitemap", "robotsTXT"]
+enableRobotsTXT = false
+
+[languages]
+  [languages.zh-CN]
+    label = "简体中文"
+    locale = "zh-CN"
+    weight = 1
+
+[caches]
+  [caches.images]
+    dir = ":cacheDir/images"
+
+[minify]
+  minifyOutput = true

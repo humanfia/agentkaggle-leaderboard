@@ -1,0 +1,274 @@
+from __future__ import annotations
+
+import csv
+import sys
+import tempfile
+import unittest
+import zipfile
+from datetime import datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
+from types import ModuleType
+from unittest.mock import patch
+
+from agentkaggle_leaderboard.kaggle_source import (
+    InvalidKaggleResponse,
+    KaggleCompetitionSource,
+    UnsafePrivateLeaderboard,
+    competition_slug,
+    validate_leaderboard_visibility,
+)
+from agentkaggle_leaderboard.models import Competition, LeaderboardSnapshot
+
+
+class KaggleSourceTests(unittest.TestCase):
+    @staticmethod
+    def _competition(deadline: datetime | None) -> Competition:
+        return Competition(
+            slug="safe-test",
+            title="Safe test",
+            url="https://www.kaggle.com/competitions/safe-test",
+            category="Featured",
+            reward="",
+            deadline=deadline,
+            api_team_count=10,
+            awards_points=True,
+        )
+
+    def test_internal_api_is_explicitly_authenticated(self) -> None:
+        class FakeKaggleApi:
+            def __init__(self) -> None:
+                self.authenticated = False
+
+            def authenticate(self) -> None:
+                self.authenticated = True
+
+        kaggle_module = ModuleType("kaggle")
+        kaggle_module.__path__ = []
+        api_module = ModuleType("kaggle.api")
+        api_module.__path__ = []
+        extended_module = ModuleType("kaggle.api.kaggle_api_extended")
+        extended_module.KaggleApi = FakeKaggleApi
+
+        with patch.dict(
+            sys.modules,
+            {
+                "kaggle": kaggle_module,
+                "kaggle.api": api_module,
+                "kaggle.api.kaggle_api_extended": extended_module,
+            },
+        ):
+            source = KaggleCompetitionSource(min_request_interval_seconds=0.000001)
+
+        self.assertTrue(source._api.authenticated)
+
+    def test_catalog_only_requests_public_groups(self) -> None:
+        calls = []
+
+        class FakeApi:
+            def competitions_list(self, **kwargs):
+                calls.append(kwargs)
+                slug = f'{kwargs["group"]}-competition'
+                item = SimpleNamespace(
+                    ref=f"https://www.kaggle.com/competitions/{slug}",
+                    title=slug,
+                    category="Featured",
+                    reward="",
+                    deadline=datetime(2026, 1, 1),
+                    team_count=10,
+                    awards_points=True,
+                )
+                return SimpleNamespace(competitions=[item], next_page_token="")
+
+        competitions = KaggleCompetitionSource(
+            FakeApi(), retry_attempts=1, min_request_interval_seconds=0.000001
+        ).list_competitions()
+
+        self.assertEqual([item.slug for item in competitions], ["general-competition", "community-competition"])
+        self.assertEqual({call["group"] for call in calls}, {"general", "community"})
+        self.assertTrue(all(call["group"] not in {"entered", "hosted", "unlaunched"} for call in calls))
+        self.assertTrue(all(call["page"] == -1 for call in calls))
+        self.assertTrue(all("page_token" in call for call in calls))
+        self.assertTrue(all(item.awards_points for item in competitions))
+
+    def test_catalog_follows_page_tokens_and_deduplicates(self) -> None:
+        calls = []
+
+        def item(slug):
+            return SimpleNamespace(
+                ref=f"https://www.kaggle.com/competitions/{slug}",
+                title=slug,
+                category="Featured",
+                reward="",
+                deadline=datetime(2026, 1, 1),
+                team_count=10,
+                awards_points=False,
+            )
+
+        class FakeApi:
+            def competitions_list(self, **kwargs):
+                calls.append(kwargs)
+                if kwargs["group"] == "general" and kwargs["page_token"] is None:
+                    return SimpleNamespace(
+                        competitions=[item("shared"), item("general-first")],
+                        next_page_token="general-next",
+                    )
+                if kwargs["group"] == "general":
+                    return SimpleNamespace(
+                        competitions=[item("shared"), item("general-second")],
+                        next_page_token="",
+                    )
+                return SimpleNamespace(
+                    competitions=[item("shared"), item("community-only")],
+                    next_page_token="",
+                )
+
+        competitions = KaggleCompetitionSource(
+            FakeApi(), retry_attempts=1, min_request_interval_seconds=0.000001
+        ).list_competitions()
+
+        self.assertEqual(
+            [competition.slug for competition in competitions],
+            ["shared", "general-first", "general-second", "community-only"],
+        )
+        self.assertEqual(len(calls), 3)
+
+    def test_repeated_catalog_page_token_is_rejected(self) -> None:
+        class FakeApi:
+            def competitions_list(self, **kwargs):
+                return SimpleNamespace(competitions=[], next_page_token="repeated")
+
+        source = KaggleCompetitionSource(
+            FakeApi(), retry_attempts=1, min_request_interval_seconds=0.000001
+        )
+        with self.assertRaises(InvalidKaggleResponse):
+            source.list_competitions()
+
+    def test_retry_after_updates_the_shared_cooldown(self) -> None:
+        source = KaggleCompetitionSource(
+            SimpleNamespace(), retry_attempts=2, min_request_interval_seconds=0.000001
+        )
+        retryable = RuntimeError("rate limited")
+        retryable.response = SimpleNamespace(status_code=429, headers={"Retry-After": "3"})
+        calls = iter((retryable, "ok"))
+
+        def operation():
+            result = next(calls)
+            if isinstance(result, BaseException):
+                raise result
+            return result
+
+        with patch.object(source, "_postpone_requests") as postpone:
+            self.assertEqual(source._call_with_retry(operation), "ok")
+        postpone.assert_called_once_with(3.0)
+
+    def test_http_date_retry_after_is_supported(self) -> None:
+        source = KaggleCompetitionSource(
+            SimpleNamespace(), retry_attempts=2, min_request_interval_seconds=0.000001
+        )
+        retryable = RuntimeError("rate limited")
+        retryable.response = SimpleNamespace(
+            status_code=429,
+            headers={"Retry-After": "Fri, 17 Jul 2026 00:00:07 GMT"},
+        )
+        calls = iter((retryable, "ok"))
+
+        def operation():
+            result = next(calls)
+            if isinstance(result, BaseException):
+                raise result
+            return result
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 7, 17, tzinfo=tz)
+
+        with (
+            patch("agentkaggle_leaderboard.kaggle_source.datetime", FixedDateTime),
+            patch.object(source, "_postpone_requests") as postpone,
+        ):
+            self.assertEqual(source._call_with_retry(operation), "ok")
+        postpone.assert_called_once_with(7.0)
+
+    def test_competition_slug_accepts_only_safe_kaggle_refs(self) -> None:
+        self.assertEqual(
+            competition_slug("https://www.kaggle.com/competitions/house-prices"),
+            "house-prices",
+        )
+        with self.assertRaises(RuntimeError):
+            competition_slug("https://www.kaggle.com/competitions/../secret")
+
+    def test_unknown_leaderboard_kind_is_rejected(self) -> None:
+        snapshot = LeaderboardSnapshot(team_count=10, kind="unknown", matches=())
+        with self.assertRaises(InvalidKaggleResponse):
+            validate_leaderboard_visibility(snapshot, self._competition(None))
+
+    def test_active_private_leaderboard_is_rejected(self) -> None:
+        snapshot = LeaderboardSnapshot(team_count=10, kind="private", matches=())
+        current_time = datetime(2026, 7, 17, tzinfo=timezone.utc)
+        with self.assertRaises(UnsafePrivateLeaderboard):
+            validate_leaderboard_visibility(
+                snapshot,
+                self._competition(datetime(2026, 8, 1, tzinfo=timezone.utc)),
+                now=current_time,
+            )
+
+    def test_ended_private_leaderboard_is_allowed(self) -> None:
+        snapshot = LeaderboardSnapshot(team_count=10, kind="private", matches=())
+        validate_leaderboard_visibility(
+            snapshot,
+            self._competition(datetime(2026, 1, 1, tzinfo=timezone.utc)),
+            now=datetime(2026, 7, 17, tzinfo=timezone.utc),
+        )
+
+    def test_archive_reader_whitelists_fields_and_matches_normalized_names(self) -> None:
+        rows = [
+            {
+                "Rank": "0",
+                "TeamId": "0",
+                "TeamName": "Alpha",
+                "LastSubmissionDate": "2026-01-01T00:00:00Z",
+                "Score": "1.000",
+                "TeamMemberUserNames": "benchmark-not-exported",
+            },
+            {
+                "Rank": "1",
+                "TeamId": "10",
+                "TeamName": "Other",
+                "LastSubmissionDate": "2026-01-01T00:00:00Z",
+                "Score": "0.999",
+                "TeamMemberUserNames": "not-exported",
+            },
+            {
+                "Rank": "2",
+                "TeamId": "11",
+                "TeamName": " ＡLPHA ",
+                "LastSubmissionDate": "2026-01-02T00:00:00Z",
+                "Score": "0.876543210",
+                "TeamMemberUserNames": "private-field",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir, "board.csv")
+            with csv_path.open("w", encoding="utf-8", newline="") as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            archive_path = Path(temp_dir, "sample.zip")
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.write(csv_path, "sample-privateleaderboard.csv")
+
+            snapshot = KaggleCompetitionSource._read_archive(archive_path, {"alpha": "Alpha"})
+
+        self.assertEqual(snapshot.team_count, 2)
+        self.assertEqual(snapshot.kind, "private")
+        self.assertEqual(len(snapshot.matches), 1)
+        self.assertEqual(snapshot.matches[0].configured_team_name, "Alpha")
+        self.assertEqual(snapshot.matches[0].rank, 2)
+        self.assertEqual(snapshot.matches[0].score, "0.876543210")
+        self.assertNotIn("private-field", repr(snapshot))
+
+
+if __name__ == "__main__":
+    unittest.main()

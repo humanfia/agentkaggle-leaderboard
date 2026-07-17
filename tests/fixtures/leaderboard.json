@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-17T01:00:00Z",
+  "status": "partial",
+  "summary": {
+    "tracked_team_count": 3,
+    "discovered_competition_count": 42,
+    "scanned_competition_count": 40,
+    "failed_competition_count": 2,
+    "matched_competition_count": 3,
+    "participation_count": 5,
+    "truncated": false,
+    "error_counts": {"access_denied": 2}
+  },
+  "teams": [
+    {"name": "Neural Nomads", "competition_count": 2, "best_rank": 7, "average_top_percent": 1.6319, "medal_candidate_count": 1},
+    {"name": "Gradient Guild", "competition_count": 2, "best_rank": 18, "average_top_percent": 3.0361, "medal_candidate_count": 2},
+    {"name": "Bayes & Beyond", "competition_count": 1, "best_rank": 63, "average_top_percent": 6.3, "medal_candidate_count": 1}
+  ],
+  "competitions": [
+    {
+      "slug": "synthetic-vision-challenge",
+      "title": "Synthetic Vision Challenge 2026",
+      "url": "https://www.kaggle.com/competitions/synthetic-vision-challenge",
+      "category": "Featured",
+      "reward": "$50,000",
+      "deadline": "2026-08-20T23:59:00Z",
+      "state": "active",
+      "leaderboard_kind": "public",
+      "leaderboard_team_count": 1264,
+      "api_team_count": 1264,
+      "awards_points": true,
+      "entries": [
+        {"team_name": "Neural Nomads", "rank": 7, "top_percent": 0.5538, "score": "0.982731", "submission_date": "2026-07-16T08:42:00Z", "medal_candidate": "gold"},
+        {"team_name": "Gradient Guild", "rank": 54, "top_percent": 4.2722, "score": "0.971084", "submission_date": "2026-07-15T15:11:00Z", "medal_candidate": "silver"}
+      ]
+    },
+    {
+      "slug": "tabular-signal-cup",
+      "title": "Tabular Signal Cup",
+      "url": "https://www.kaggle.com/competitions/tabular-signal-cup",
+      "category": "Research",
+      "reward": "$25,000",
+      "deadline": "2026-06-30T23:59:00Z",
+      "state": "ended",
+      "leaderboard_kind": "private",
+      "leaderboard_team_count": 1000,
+      "api_team_count": 1003,
+      "awards_points": true,
+      "entries": [
+        {"team_name": "Gradient Guild", "rank": 18, "top_percent": 1.8, "score": "0.11489231", "submission_date": "2026-06-30T21:04:00Z", "medal_candidate": "silver"},
+        {"team_name": "Bayes & Beyond", "rank": 63, "top_percent": 6.3, "score": "0.11840777", "submission_date": "2026-06-30T19:44:00Z", "medal_candidate": "bronze"}
+      ]
+    },
+    {
+      "slug": "audio-wildlife-mini",
+      "title": "Audio Wildlife Mini",
+      "url": "https://www.kaggle.com/competitions/audio-wildlife-mini",
+      "category": "Playground",
+      "reward": "Swag",
+      "deadline": "2026-05-01T23:59:00Z",
+      "state": "ended",
+      "leaderboard_kind": "private",
+      "leaderboard_team_count": 369,
+      "api_team_count": 369,
+      "awards_points": false,
+      "entries": [
+        {"team_name": "Neural Nomads", "rank": 10, "top_percent": 2.7100, "score": "0.83420", "submission_date": "2026-05-01T22:10:00Z", "medal_candidate": "not_eligible"}
+      ]
+    }
+  ],
+  "methodology": {
+    "rank": "Official Rank from Kaggle's complete leaderboard CSV.",
+    "top_percent": "Rank divided by the number of rows in that leaderboard, multiplied by 100.",
+    "score": "Score is preserved as text exactly as provided by Kaggle.",
+    "medal_candidate": "Rank-only estimate; eligibility is not guaranteed."
+  }
+}
