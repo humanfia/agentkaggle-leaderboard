@@ -65,6 +65,8 @@ h1 em { color: var(--accent); font-style: normal; }
 .notice-icon { display: grid; place-items: center; width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%; background: var(--warning); color: #1a1306; font-weight: 900; }
 .notice strong { color: #ffe0a3; }
 .notice p { color: #c8b99a; margin: 3px 0 0; font-size: .9rem; }
+.notice-details { margin: 7px 0 0; padding-left: 1.1rem; color: #c8b99a; font-size: .86rem; }
+.notice-details li + li { margin-top: 4px; }
 
 .metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
 .metric-card { min-height: 152px; border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; background: linear-gradient(145deg, rgba(16, 35, 43, .88), rgba(9, 23, 29, .88)); box-shadow: var(--shadow); display: flex; flex-direction: column; }

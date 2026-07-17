@@ -8,6 +8,7 @@ from typing import Callable
 
 from requests import exceptions as requests_exceptions
 
+from .kaggle_source import InvalidKaggleResponse, UnsafePrivateLeaderboard
 from .medals import medal_candidate
 from .models import Competition, CompetitionSource, LeaderboardSnapshot, ScanFailure
 from .settings import Settings
@@ -51,9 +52,11 @@ def _safe_failure_kind(exc: BaseException) -> str:
         ),
     ):
         return "network"
-    if type(exc).__name__ == "UnsafePrivateLeaderboard":
+    if isinstance(exc, UnsafePrivateLeaderboard):
         return "unsafe_private_leaderboard"
-    return type(exc).__name__.replace("Error", "").casefold() or "unknown"
+    if isinstance(exc, InvalidKaggleResponse):
+        return "invalid_response"
+    return "unexpected"
 
 
 def _public_competition(

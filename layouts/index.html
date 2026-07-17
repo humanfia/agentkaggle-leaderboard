@@ -60,7 +60,18 @@
             <span class="notice-icon" aria-hidden="true">!</span>
             <div>
               <strong>当前是部分扫描快照</strong>
-              <p>成功扫描 {{ $data.summary.scanned_competition_count }} / {{ $data.summary.discovered_competition_count }} 场；{{ if $data.summary.truncated }}本次设置了比赛数量上限。{{ end }}{{ if gt $data.summary.failed_competition_count 0 }}另有 {{ $data.summary.failed_competition_count }} 场因权限、限流或接口响应未能读取。{{ end }}</p>
+              <p>成功扫描 {{ $data.summary.scanned_competition_count }} / {{ $data.summary.discovered_competition_count }} 场。{{ if $data.summary.truncated }}本次设置了比赛数量上限。{{ end }}</p>
+              {{ if gt $data.summary.failed_competition_count 0 }}
+                <ul class="notice-details">
+                  {{ with index $data.summary.error_counts "not_found" }}<li>{{ . }} 场已在公开目录中发现，但 Kaggle 当前未提供可下载榜单（HTTP 404）。</li>{{ end }}
+                  {{ with index $data.summary.error_counts "access_denied" }}<li>{{ . }} 场被 Kaggle 拒绝访问（HTTP 401/403）。</li>{{ end }}
+                  {{ with index $data.summary.error_counts "rate_limited" }}<li>{{ . }} 场在重试后仍被 Kaggle 限流（HTTP 429）。</li>{{ end }}
+                  {{ with index $data.summary.error_counts "network" }}<li>{{ . }} 场因网络连接或超时未完成。</li>{{ end }}
+                  {{ with index $data.summary.error_counts "unsafe_private_leaderboard" }}<li>{{ . }} 场返回了尚不可公开的 Private Leaderboard，已拒绝发布。</li>{{ end }}
+                  {{ with index $data.summary.error_counts "invalid_response" }}<li>{{ . }} 场返回的榜单格式无法安全解析。</li>{{ end }}
+                  {{ with index $data.summary.error_counts "unexpected" }}<li>{{ . }} 场发生未分类错误，已安全跳过。</li>{{ end }}
+                </ul>
+              {{ end }}
             </div>
           </aside>
         {{ end }}

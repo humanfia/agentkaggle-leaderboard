@@ -37,6 +37,15 @@ PUBLIC_KEYS = {
     "entry": {"team_name", "rank", "top_percent", "score", "submission_date", "medal_candidate"},
     "methodology": {"rank", "top_percent", "score", "medal_candidate"},
 }
+PUBLIC_ERROR_KINDS = {
+    "access_denied",
+    "not_found",
+    "rate_limited",
+    "network",
+    "unsafe_private_leaderboard",
+    "invalid_response",
+    "unexpected",
+}
 
 
 def _require_exact_keys(value: dict[str, Any], expected: set[str], location: str) -> None:
@@ -47,6 +56,11 @@ def _require_exact_keys(value: dict[str, Any], expected: set[str], location: str
 def validate_public_payload(payload: dict[str, Any]) -> None:
     _require_exact_keys(payload, PUBLIC_KEYS["top"], "root")
     _require_exact_keys(payload["summary"], PUBLIC_KEYS["summary"], "summary")
+    error_counts = payload["summary"]["error_counts"]
+    if not isinstance(error_counts, dict) or not set(error_counts).issubset(PUBLIC_ERROR_KINDS):
+        raise ValueError("Public payload has an unsupported error category")
+    if not all(isinstance(count, int) and count > 0 for count in error_counts.values()):
+        raise ValueError("Public payload has an invalid error count")
     _require_exact_keys(payload["methodology"], PUBLIC_KEYS["methodology"], "methodology")
     for index, team in enumerate(payload["teams"]):
         _require_exact_keys(team, PUBLIC_KEYS["team"], f"teams[{index}]")

@@ -4,7 +4,8 @@ import json
 import unittest
 from datetime import datetime, timezone
 
-from agentkaggle_leaderboard.builder import build_leaderboard
+from agentkaggle_leaderboard.builder import _safe_failure_kind, build_leaderboard
+from agentkaggle_leaderboard.kaggle_source import InvalidKaggleResponse
 from agentkaggle_leaderboard.models import Competition, LeaderboardEntry, LeaderboardSnapshot
 from agentkaggle_leaderboard.output import validate_public_payload
 from agentkaggle_leaderboard.settings import Settings
@@ -100,6 +101,24 @@ class BuilderTests(unittest.TestCase):
         payload["competitions"][0]["TeamMemberUserNames"] = "must never be published"
         with self.assertRaisesRegex(ValueError, "unexpected or missing fields"):
             validate_public_payload(payload)
+
+    def test_public_schema_rejects_unapproved_error_categories(self) -> None:
+        payload = build_leaderboard(
+            FakeSource(),
+            Settings(("Alpha",), workers=1),
+            generated_at=datetime(2026, 7, 17, tzinfo=timezone.utc),
+        )
+        payload["summary"]["error_counts"] = {"SensitiveInternalException": 1}
+        with self.assertRaisesRegex(ValueError, "unsupported error category"):
+            validate_public_payload(payload)
+
+    def test_failure_kinds_are_fixed_public_categories(self) -> None:
+        self.assertEqual(
+            _safe_failure_kind(InvalidKaggleResponse("raw upstream detail")),
+            "invalid_response",
+        )
+        sensitive_exception = type("SensitiveInternalException", (RuntimeError,), {})
+        self.assertEqual(_safe_failure_kind(sensitive_exception("raw detail")), "unexpected")
 
     def test_max_competitions_marks_result_truncated(self) -> None:
         payload = build_leaderboard(

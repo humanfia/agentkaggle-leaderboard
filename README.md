@@ -95,7 +95,7 @@ Secret 只注入数据生成步骤；Hugo、Pages 上传和部署步骤拿不到
 
 程序只枚举 Kaggle 的 `general` 和 `community` 公开组，使用 API 返回的 `next_page_token` 走完整目录并跨页去重；同时显式排除凭据相关的 `entered`、`hosted`、`unlaunched` 与 `unlaunched_community`。这是公开仓库的 fail-closed 选择：默认不发布受邀或尚未公开比赛的名称和结果。
 
-Kaggle 对部分历史比赛可能返回 403、404、429 或不完整响应。程序会低并发、限速、把 `Retry-After` 作为所有扫描线程共享的冷却期并重试；仍失败的比赛只计入安全的错误类别，不把原始异常、请求头或响应写入页面。只要存在失败或使用了 `--max-competitions`，页面就标记为 `partial`。如果可用比赛不足发现数的 50%，构建直接失败，GitHub Pages 会保留上一版而不会被严重残缺快照覆盖。
+Kaggle 对部分比赛可能返回 403、404、429 或不完整响应；例如仅用于提交论文、没有独立可下载 leaderboard 的赛道也可能出现在 competition 目录中。程序会低并发、限速、把 `Retry-After` 作为所有扫描线程共享的冷却期并重试；仍失败的比赛只计入固定的安全错误类别，页面会区分 404、拒绝访问、限流、网络与格式错误，不把原始异常、请求头或响应写入页面。只要存在未读取比赛或使用了 `--max-competitions`，页面就标记为 `partial`。如果可用比赛不足发现数的 50%，构建直接失败，GitHub Pages 会保留上一版而不会被严重残缺快照覆盖。
 
 ### 排名与百分比
 
