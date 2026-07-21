@@ -72,6 +72,9 @@
                   {{ with index $data.summary.error_counts "unexpected" }}<li>{{ . }} 场发生未分类错误，已安全跳过。</li>{{ end }}
                 </ul>
               {{ end }}
+              {{ if gt $data.summary.failed_late_submission_account_count 0 }}
+                <p>{{ $data.summary.failed_late_submission_account_count }} / {{ $data.summary.late_submission_account_count }} 个授权账户未能完成赛后提交扫描；其余账户的结果仍保留。</p>
+              {{ end }}
             </div>
           </aside>
         {{ end }}
@@ -93,9 +96,9 @@
             <small>共发现 {{ $data.summary.discovered_competition_count }} 场</small>
           </article>
           <article class="metric-card">
-            <span>目标团队</span>
-            <strong>{{ $data.summary.tracked_team_count }}</strong>
-            <small>来自 KAGGLE_TEAMS</small>
+            <span>赛后提交</span>
+            <strong>{{ $data.summary.late_submission_count }}</strong>
+            <small>来自 {{ $data.summary.late_submission_account_count }} 个授权账户</small>
           </article>
         </section>
 
@@ -110,7 +113,7 @@
           <div class="table-wrap">
             <table class="summary-table">
               <thead>
-                <tr><th scope="col">团队</th><th scope="col">比赛</th><th scope="col">最佳名次</th><th scope="col">平均 Top%</th><th scope="col">奖牌候选区</th></tr>
+                <tr><th scope="col">团队</th><th scope="col">比赛</th><th scope="col">最佳名次</th><th scope="col">平均 Top%</th><th scope="col">奖牌候选区</th><th scope="col">赛后提交</th></tr>
               </thead>
               <tbody>
                 {{ range $data.teams }}
@@ -120,12 +123,43 @@
                     <td>{{ if .best_rank }}#{{ .best_rank }}{{ else }}—{{ end }}</td>
                     <td>{{ if ne .average_top_percent nil }}{{ lang.FormatNumberCustom 2 .average_top_percent }}%{{ else }}—{{ end }}</td>
                     <td>{{ .medal_candidate_count }}</td>
+                    <td>{{ .late_submission_count }}</td>
                   </tr>
                 {{ end }}
               </tbody>
             </table>
           </div>
         </section>
+
+        {{ if gt $data.summary.late_submission_count 0 }}
+          <section class="late-section" aria-labelledby="late-title">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">POST-DEADLINE RESULTS</p>
+                <h2 id="late-title">赛后提交</h2>
+              </div>
+              <p>来自授权账户的 My Submissions。仅表示截止日期后的验证分数，不产生官方排名或奖牌。</p>
+            </div>
+            <div class="table-wrap late-table-wrap">
+              <table class="late-table">
+                <thead>
+                  <tr><th scope="col">比赛</th><th scope="col">团队</th><th scope="col">Public Score</th><th scope="col">Private Score</th><th scope="col">提交时间</th></tr>
+                </thead>
+                <tbody>
+                  {{ range $data.late_submissions }}
+                    <tr>
+                      <th scope="row"><a href="{{ .competition_url }}" target="_blank" rel="noopener noreferrer">{{ .competition_title }}<span aria-hidden="true">↗</span></a></th>
+                      <td><span class="team-dot" aria-hidden="true"></span>{{ .team_name }}</td>
+                      <td><code class="score">{{ if .public_score }}{{ .public_score }}{{ else }}—{{ end }}</code></td>
+                      <td><code class="score">{{ if .private_score }}{{ .private_score }}{{ else }}—{{ end }}</code></td>
+                      <td><time class="local-date" datetime="{{ .submission_date }}">{{ .submission_date }}</time></td>
+                    </tr>
+                  {{ end }}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        {{ end }}
 
         <section class="leaderboard-section" aria-labelledby="leaderboard-title">
           <div class="section-heading leaderboard-heading">
@@ -210,7 +244,8 @@
           <div class="method-grid">
             <article><span>01</span><h3>官方名次</h3><p>直接读取 Kaggle 完整 leaderboard CSV 的 Rank 字段，不用数组下标推断。</p></article>
             <article><span>02</span><h3>Top 百分比</h3><p>官方 Rank ÷ 该 CSV 的有效行数 × 100；数值越小，排名越靠前。</p></article>
-            <article><span>03</span><h3>奖牌候选</h3><p>仅在 Kaggle 标记该比赛会计入积分时，按 progression 位次区间估算。团队资格、DQ、最终验证与进行中榜单变化仍可能改变结果。</p></article>
+            <article><span>03</span><h3>赛后提交</h3><p>读取授权账户的 My Submissions，只展示比赛截止后完成的目标团队提交。它是验证分数，不是官方榜单名次。</p></article>
+            <article><span>04</span><h3>奖牌候选</h3><p>仅在 Kaggle 标记该比赛会计入积分时，按 progression 位次区间估算。团队资格、DQ、最终验证与进行中榜单变化仍可能改变结果。</p></article>
           </div>
         </section>
       {{ end }}
@@ -220,7 +255,7 @@
   <footer>
     <div class="shell footer-inner">
       <p>Kaggle Team Radar · 只读公开快照</p>
-      <p>数据源：Kaggle 官方 API / Leaderboard CSV</p>
+      <p>数据源：Kaggle 官方 API / Leaderboard CSV / My Submissions</p>
     </div>
   </footer>
 </body>

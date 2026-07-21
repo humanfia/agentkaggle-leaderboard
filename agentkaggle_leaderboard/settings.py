@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
@@ -45,6 +45,26 @@ def parse_team_names(raw_value: str | None) -> tuple[str, ...]:
     return names
 
 
+def parse_api_tokens(single_token: str | None, raw_tokens: str | None) -> tuple[str, ...]:
+    candidates: list[str] = []
+    if single_token and single_token.strip():
+        candidates.append(single_token.strip())
+
+    if raw_tokens and raw_tokens.strip():
+        try:
+            parsed = json.loads(raw_tokens)
+        except json.JSONDecodeError as exc:
+            raise ConfigurationError("KAGGLE_API_TOKENS is not a valid JSON array") from exc
+        if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
+            raise ConfigurationError("KAGGLE_API_TOKENS JSON must be an array of strings")
+        candidates.extend(item.strip() for item in parsed if item.strip())
+
+    tokens = tuple(dict.fromkeys(candidates))
+    if not tokens:
+        raise ConfigurationError("KAGGLE_API_TOKEN or KAGGLE_API_TOKENS is required")
+    return tokens
+
+
 def _parse_positive_int(name: str, default: int, maximum: int) -> int:
     raw_value = os.environ.get(name)
     if raw_value is None or not raw_value.strip():
@@ -76,6 +96,7 @@ class Settings:
     teams: tuple[str, ...]
     workers: int = 2
     request_interval_seconds: float = 2.0
+    api_tokens: tuple[str, ...] = field(default=(), repr=False, compare=False)
 
     @property
     def normalized_teams(self) -> dict[str, str]:
@@ -86,8 +107,10 @@ class Settings:
         if load_local_dotenv:
             load_dotenv(override=False)
         teams = parse_team_names(os.environ.get("KAGGLE_TEAMS"))
-        if not os.environ.get("KAGGLE_API_TOKEN"):
-            raise ConfigurationError("KAGGLE_API_TOKEN is required")
+        api_tokens = parse_api_tokens(
+            os.environ.get("KAGGLE_API_TOKEN"),
+            os.environ.get("KAGGLE_API_TOKENS"),
+        )
         workers = _parse_positive_int("KAGGLE_SCAN_WORKERS", default=2, maximum=16)
         request_interval_seconds = _parse_positive_float(
             "KAGGLE_REQUEST_INTERVAL_SECONDS", default=2.0, maximum=10
@@ -96,4 +119,5 @@ class Settings:
             teams=teams,
             workers=workers,
             request_interval_seconds=request_interval_seconds,
+            api_tokens=api_tokens,
         )

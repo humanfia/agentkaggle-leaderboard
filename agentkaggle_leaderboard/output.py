@@ -8,7 +8,16 @@ from typing import Any
 
 
 PUBLIC_KEYS = {
-    "top": {"schema_version", "generated_at", "status", "summary", "teams", "competitions", "methodology"},
+    "top": {
+        "schema_version",
+        "generated_at",
+        "status",
+        "summary",
+        "teams",
+        "competitions",
+        "late_submissions",
+        "methodology",
+    },
     "summary": {
         "tracked_team_count",
         "discovered_competition_count",
@@ -16,10 +25,22 @@ PUBLIC_KEYS = {
         "failed_competition_count",
         "matched_competition_count",
         "participation_count",
+        "late_submission_account_count",
+        "failed_late_submission_account_count",
+        "late_submission_competition_count",
+        "late_submission_count",
+        "late_submission_error_counts",
         "truncated",
         "error_counts",
     },
-    "team": {"name", "competition_count", "best_rank", "average_top_percent", "medal_candidate_count"},
+    "team": {
+        "name",
+        "competition_count",
+        "best_rank",
+        "average_top_percent",
+        "medal_candidate_count",
+        "late_submission_count",
+    },
     "competition": {
         "slug",
         "title",
@@ -35,7 +56,17 @@ PUBLIC_KEYS = {
         "entries",
     },
     "entry": {"team_name", "rank", "top_percent", "score", "submission_date", "medal_candidate"},
-    "methodology": {"rank", "top_percent", "score", "medal_candidate"},
+    "late_submission": {
+        "competition_slug",
+        "competition_title",
+        "competition_url",
+        "deadline",
+        "team_name",
+        "public_score",
+        "private_score",
+        "submission_date",
+    },
+    "methodology": {"rank", "top_percent", "score", "late_submission", "medal_candidate"},
 }
 PUBLIC_ERROR_KINDS = {
     "access_denied",
@@ -61,6 +92,11 @@ def validate_public_payload(payload: dict[str, Any]) -> None:
         raise ValueError("Public payload has an unsupported error category")
     if not all(isinstance(count, int) and count > 0 for count in error_counts.values()):
         raise ValueError("Public payload has an invalid error count")
+    late_error_counts = payload["summary"]["late_submission_error_counts"]
+    if not isinstance(late_error_counts, dict) or not set(late_error_counts).issubset(PUBLIC_ERROR_KINDS):
+        raise ValueError("Public payload has an unsupported late submission error category")
+    if not all(isinstance(count, int) and count > 0 for count in late_error_counts.values()):
+        raise ValueError("Public payload has an invalid late submission error count")
     _require_exact_keys(payload["methodology"], PUBLIC_KEYS["methodology"], "methodology")
     for index, team in enumerate(payload["teams"]):
         _require_exact_keys(team, PUBLIC_KEYS["team"], f"teams[{index}]")
@@ -76,6 +112,12 @@ def validate_public_payload(payload: dict[str, Any]) -> None:
                 PUBLIC_KEYS["entry"],
                 f"competitions[{competition_index}].entries[{entry_index}]",
             )
+    for index, submission in enumerate(payload["late_submissions"]):
+        _require_exact_keys(
+            submission,
+            PUBLIC_KEYS["late_submission"],
+            f"late_submissions[{index}]",
+        )
 
 
 def write_json_atomic(payload: dict[str, Any], output_path: Path) -> None:

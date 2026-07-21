@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import sys
 import tempfile
 import unittest
@@ -15,6 +16,7 @@ from agentkaggle_leaderboard.kaggle_source import (
     InvalidKaggleResponse,
     KaggleCompetitionSource,
     UnsafePrivateLeaderboard,
+    authenticated_kaggle_api,
     competition_slug,
     validate_leaderboard_visibility,
 )
@@ -61,6 +63,37 @@ class KaggleSourceTests(unittest.TestCase):
             source = KaggleCompetitionSource(min_request_interval_seconds=0.000001)
 
         self.assertTrue(source._api.authenticated)
+
+    def test_explicit_token_authentication_restores_the_environment(self) -> None:
+        observed_tokens: list[str | None] = []
+
+        class FakeKaggleApi:
+            def authenticate(self) -> None:
+                observed_tokens.append(os.environ.get("KAGGLE_API_TOKEN"))
+
+        kaggle_module = ModuleType("kaggle")
+        kaggle_module.__path__ = []
+        api_module = ModuleType("kaggle.api")
+        api_module.__path__ = []
+        extended_module = ModuleType("kaggle.api.kaggle_api_extended")
+        extended_module.KaggleApi = FakeKaggleApi
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "kaggle": kaggle_module,
+                    "kaggle.api": api_module,
+                    "kaggle.api.kaggle_api_extended": extended_module,
+                },
+            ),
+            patch.dict("os.environ", {"KAGGLE_API_TOKEN": "previous-token"}, clear=True),
+        ):
+            authenticated_kaggle_api("temporary-token")
+            restored_token = os.environ.get("KAGGLE_API_TOKEN")
+
+        self.assertEqual(observed_tokens, ["temporary-token"])
+        self.assertEqual(restored_token, "previous-token")
 
     def test_catalog_only_requests_public_groups(self) -> None:
         calls = []

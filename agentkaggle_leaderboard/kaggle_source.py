@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 import re
 import tempfile
 import threading
@@ -88,8 +89,24 @@ def validate_leaderboard_visibility(
         )
 
 
-class KaggleCompetitionSource:
-    PUBLIC_GROUPS = ("general", "community")
+def authenticated_kaggle_api(api_token: str):
+    """Authenticate one isolated SDK instance without leaving its token in the environment."""
+    from kaggle.api.kaggle_api_extended import KaggleApi
+
+    previous_token = os.environ.get("KAGGLE_API_TOKEN")
+    os.environ["KAGGLE_API_TOKEN"] = api_token
+    try:
+        api = KaggleApi()
+        api.authenticate()
+    finally:
+        if previous_token is None:
+            os.environ.pop("KAGGLE_API_TOKEN", None)
+        else:
+            os.environ["KAGGLE_API_TOKEN"] = previous_token
+    return api
+
+
+class _KaggleRequestSource:
     RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
 
     def __init__(
@@ -164,6 +181,10 @@ class KaggleCompetitionSource:
                         delay = min(2**attempt, 30)
                 self._postpone_requests(delay)
         raise AssertionError("unreachable")
+
+
+class KaggleCompetitionSource(_KaggleRequestSource):
+    PUBLIC_GROUPS = ("general", "community")
 
     def list_competitions(self, max_competitions: int | None = None) -> list[Competition]:
         competitions: list[Competition] = []

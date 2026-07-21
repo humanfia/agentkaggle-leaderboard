@@ -10,7 +10,13 @@ from requests import exceptions as requests_exceptions
 
 from .kaggle_source import InvalidKaggleResponse, UnsafePrivateLeaderboard
 from .medals import medal_candidate
-from .models import Competition, CompetitionSource, LeaderboardSnapshot, ScanFailure
+from .models import (
+    Competition,
+    CompetitionSource,
+    LateSubmissionEntry,
+    LeaderboardSnapshot,
+    ScanFailure,
+)
 from .settings import Settings
 
 
@@ -98,8 +104,49 @@ def _public_competition(
     }
 
 
-def _team_summaries(teams: tuple[str, ...], competitions: list[dict[str, object]]) -> list[dict[str, object]]:
+def _public_late_submissions(
+    late_submissions: tuple[LateSubmissionEntry, ...],
+) -> list[dict[str, object]]:
+    unique = {
+        (
+            entry.competition_slug,
+            entry.configured_team_name,
+            entry.submission_date,
+            entry.public_score,
+            entry.private_score,
+        ): entry
+        for entry in late_submissions
+    }
+    ordered = sorted(
+        unique.values(),
+        key=lambda entry: (
+            -entry.submission_date.timestamp(),
+            entry.competition_title.casefold(),
+            entry.configured_team_name.casefold(),
+        ),
+    )
+    return [
+        {
+            "competition_slug": entry.competition_slug,
+            "competition_title": entry.competition_title,
+            "competition_url": entry.competition_url,
+            "deadline": _iso_utc(entry.deadline),
+            "team_name": entry.configured_team_name,
+            "public_score": entry.public_score,
+            "private_score": entry.private_score,
+            "submission_date": _iso_utc(entry.submission_date),
+        }
+        for entry in ordered
+    ]
+
+
+def _team_summaries(
+    teams: tuple[str, ...],
+    competitions: list[dict[str, object]],
+    late_submissions: list[dict[str, object]],
+) -> list[dict[str, object]]:
     entries_by_team: dict[str, list[dict[str, object]]] = {team: [] for team in teams}
+    late_counts = Counter(str(entry["team_name"]) for entry in late_submissions)
     for competition in competitions:
         for entry in competition["entries"]:  # type: ignore[index]
             entries_by_team[entry["team_name"]].append(entry)  # type: ignore[index]
@@ -118,12 +165,14 @@ def _team_summaries(teams: tuple[str, ...], competitions: list[dict[str, object]
                 "best_rank": min((int(entry["rank"]) for entry in entries), default=None),
                 "average_top_percent": round(fmean(top_percents), 4) if top_percents else None,
                 "medal_candidate_count": medal_count,
+                "late_submission_count": late_counts[team],
             }
         )
     return sorted(
         summaries,
         key=lambda item: (
             -int(item["competition_count"]),
+            -int(item["late_submission_count"]),
             float(item["average_top_percent"]) if item["average_top_percent"] is not None else float("inf"),
             str(item["name"]).casefold(),
         ),
@@ -137,6 +186,9 @@ def build_leaderboard(
     max_competitions: int | None = None,
     generated_at: datetime | None = None,
     progress: ProgressCallback | None = None,
+    late_submissions: tuple[LateSubmissionEntry, ...] = (),
+    late_submission_account_count: int = 0,
+    late_submission_failure_kinds: tuple[str, ...] = (),
 ) -> dict[str, object]:
     generated_at = generated_at or datetime.now(timezone.utc)
     if generated_at.tzinfo is None:
@@ -185,12 +237,17 @@ def build_leaderboard(
     )
 
     participation_count = sum(len(item["entries"]) for item in public_competitions)
+    public_late_submissions = _public_late_submissions(late_submissions)
+    late_competition_count = len(
+        {str(entry["competition_slug"]) for entry in public_late_submissions}
+    )
     truncated = max_competitions is not None and len(competitions) >= max_competitions
-    status = "partial" if failures or truncated else "ready"
+    status = "partial" if failures or late_submission_failure_kinds or truncated else "ready"
     error_counts = dict(sorted(Counter(failure.kind for failure in failures).items()))
+    late_error_counts = dict(sorted(Counter(late_submission_failure_kinds).items()))
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "generated_at": _iso_utc(generated_at),
         "status": status,
         "summary": {
@@ -200,15 +257,25 @@ def build_leaderboard(
             "failed_competition_count": len(failures),
             "matched_competition_count": len(public_competitions),
             "participation_count": participation_count,
+            "late_submission_account_count": late_submission_account_count,
+            "failed_late_submission_account_count": len(late_submission_failure_kinds),
+            "late_submission_competition_count": late_competition_count,
+            "late_submission_count": len(public_late_submissions),
+            "late_submission_error_counts": late_error_counts,
             "truncated": truncated,
             "error_counts": error_counts,
         },
-        "teams": _team_summaries(settings.teams, public_competitions),
+        "teams": _team_summaries(settings.teams, public_competitions, public_late_submissions),
         "competitions": public_competitions,
+        "late_submissions": public_late_submissions,
         "methodology": {
             "rank": "Official Rank from Kaggle's complete leaderboard CSV.",
             "top_percent": "Rank divided by the number of rows in that leaderboard, multiplied by 100.",
             "score": "Score is preserved as text exactly as provided by Kaggle.",
+            "late_submission": (
+                "A completed submission made after the competition deadline and returned by the "
+                "authenticated account's My Submissions API. It is not an official rank."
+            ),
             "medal_candidate": (
                 "Shown only when Kaggle marks the competition as awarding points. It remains a rank-only "
                 "estimate: team eligibility, disqualification, verification and active standings can change it."

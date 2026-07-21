@@ -6,7 +6,12 @@ from datetime import datetime, timezone
 
 from agentkaggle_leaderboard.builder import _safe_failure_kind, build_leaderboard
 from agentkaggle_leaderboard.kaggle_source import InvalidKaggleResponse
-from agentkaggle_leaderboard.models import Competition, LeaderboardEntry, LeaderboardSnapshot
+from agentkaggle_leaderboard.models import (
+    Competition,
+    LateSubmissionEntry,
+    LeaderboardEntry,
+    LeaderboardSnapshot,
+)
 from agentkaggle_leaderboard.output import validate_public_payload
 from agentkaggle_leaderboard.settings import Settings
 
@@ -101,6 +106,51 @@ class BuilderTests(unittest.TestCase):
         payload["competitions"][0]["TeamMemberUserNames"] = "must never be published"
         with self.assertRaisesRegex(ValueError, "unexpected or missing fields"):
             validate_public_payload(payload)
+
+    def test_late_submissions_are_sanitized_deduplicated_and_counted(self) -> None:
+        late_entry = LateSubmissionEntry(
+            competition_slug="ended-comp",
+            competition_title="Ended competition",
+            competition_url="https://www.kaggle.com/competitions/ended-comp",
+            deadline=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            configured_team_name="Beta",
+            public_score="0.91",
+            private_score="0.87",
+            submission_date=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        )
+        payload = build_leaderboard(
+            FakeSource(),
+            Settings(("Alpha", "Beta"), workers=2),
+            generated_at=datetime(2026, 7, 17, tzinfo=timezone.utc),
+            late_submissions=(late_entry, late_entry),
+            late_submission_account_count=2,
+            late_submission_failure_kinds=("access_denied",),
+        )
+
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(payload["summary"]["late_submission_account_count"], 2)
+        self.assertEqual(payload["summary"]["failed_late_submission_account_count"], 1)
+        self.assertEqual(payload["summary"]["late_submission_competition_count"], 1)
+        self.assertEqual(payload["summary"]["late_submission_count"], 1)
+        self.assertEqual(
+            payload["summary"]["late_submission_error_counts"],
+            {"access_denied": 1},
+        )
+        self.assertEqual(payload["teams"][1]["late_submission_count"], 1)
+        self.assertEqual(
+            set(payload["late_submissions"][0]),
+            {
+                "competition_slug",
+                "competition_title",
+                "competition_url",
+                "deadline",
+                "team_name",
+                "public_score",
+                "private_score",
+                "submission_date",
+            },
+        )
+        validate_public_payload(payload)
 
     def test_public_schema_rejects_unapproved_error_categories(self) -> None:
         payload = build_leaderboard(

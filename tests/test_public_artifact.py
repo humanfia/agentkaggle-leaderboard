@@ -25,6 +25,18 @@ class PublicArtifactTests(unittest.TestCase):
         self.assertIn("forbidden field marker found", rendered)
         self.assertNotIn(token, rendered)
 
+    def test_every_token_in_a_multi_account_secret_is_detected(self) -> None:
+        tokens = ("first-token-123456", "second-token-123456")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            artifact = Path(temp_dir, "index.html")
+            artifact.write_text(f"public {tokens[1]}", encoding="utf-8")
+            findings = scan([artifact], tokens)
+
+        rendered = "\n".join(findings)
+        self.assertIn("credential value found", rendered)
+        self.assertNotIn(tokens[0], rendered)
+        self.assertNotIn(tokens[1], rendered)
+
     def test_unknown_file_type_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             artifact = Path(temp_dir, "renamed-archive.bin")

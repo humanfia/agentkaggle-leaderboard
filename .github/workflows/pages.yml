@@ -46,6 +46,7 @@ jobs:
         env:
           KAGGLE_TEAMS: ${{ secrets.KAGGLE_TEAMS }}
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_API_TOKENS: ${{ secrets.KAGGLE_API_TOKENS }}
           KAGGLE_SCAN_WORKERS: "2"
           KAGGLE_REQUEST_INTERVAL_SECONDS: "2"
         run: uv run python -m agentkaggle_leaderboard --output data/leaderboard.json
@@ -72,6 +73,7 @@ jobs:
       - name: Check public artifact safety
         env:
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+          KAGGLE_API_TOKENS: ${{ secrets.KAGGLE_API_TOKENS }}
         run: uv run python scripts/check_public_artifact.py public data/leaderboard.json
 
       - name: Upload Pages artifact

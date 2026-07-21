@@ -32,6 +32,18 @@ class LeaderboardSnapshot:
     matches: tuple[LeaderboardEntry, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class LateSubmissionEntry:
+    competition_slug: str
+    competition_title: str
+    competition_url: str
+    deadline: datetime
+    configured_team_name: str
+    public_score: str
+    private_score: str
+    submission_date: datetime
+
+
 class CompetitionSource(Protocol):
     def list_competitions(self, max_competitions: int | None = None) -> list[Competition]: ...
 

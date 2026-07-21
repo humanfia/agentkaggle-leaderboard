@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "generated_at": "2026-07-17T01:00:00Z",
   "status": "partial",
   "summary": {
@@ -9,13 +9,18 @@
     "failed_competition_count": 2,
     "matched_competition_count": 3,
     "participation_count": 5,
+    "late_submission_account_count": 2,
+    "failed_late_submission_account_count": 0,
+    "late_submission_competition_count": 1,
+    "late_submission_count": 2,
+    "late_submission_error_counts": {},
     "truncated": false,
     "error_counts": {"access_denied": 2}
   },
   "teams": [
-    {"name": "Neural Nomads", "competition_count": 2, "best_rank": 7, "average_top_percent": 1.6319, "medal_candidate_count": 1},
-    {"name": "Gradient Guild", "competition_count": 2, "best_rank": 18, "average_top_percent": 3.0361, "medal_candidate_count": 2},
-    {"name": "Bayes & Beyond", "competition_count": 1, "best_rank": 63, "average_top_percent": 6.3, "medal_candidate_count": 1}
+    {"name": "Neural Nomads", "competition_count": 2, "best_rank": 7, "average_top_percent": 1.6319, "medal_candidate_count": 1, "late_submission_count": 1},
+    {"name": "Gradient Guild", "competition_count": 2, "best_rank": 18, "average_top_percent": 3.0361, "medal_candidate_count": 2, "late_submission_count": 1},
+    {"name": "Bayes & Beyond", "competition_count": 1, "best_rank": 63, "average_top_percent": 6.3, "medal_candidate_count": 1, "late_submission_count": 0}
   ],
   "competitions": [
     {
@@ -69,10 +74,33 @@
       ]
     }
   ],
+  "late_submissions": [
+    {
+      "competition_slug": "tabular-signal-cup",
+      "competition_title": "Tabular Signal Cup",
+      "competition_url": "https://www.kaggle.com/competitions/tabular-signal-cup",
+      "deadline": "2026-06-30T23:59:00Z",
+      "team_name": "Neural Nomads",
+      "public_score": "0.11391",
+      "private_score": "0.11502",
+      "submission_date": "2026-07-10T09:15:00Z"
+    },
+    {
+      "competition_slug": "tabular-signal-cup",
+      "competition_title": "Tabular Signal Cup",
+      "competition_url": "https://www.kaggle.com/competitions/tabular-signal-cup",
+      "deadline": "2026-06-30T23:59:00Z",
+      "team_name": "Gradient Guild",
+      "public_score": "0.11277",
+      "private_score": "0.11421",
+      "submission_date": "2026-07-08T13:40:00Z"
+    }
+  ],
   "methodology": {
     "rank": "Official Rank from Kaggle's complete leaderboard CSV.",
     "top_percent": "Rank divided by the number of rows in that leaderboard, multiplied by 100.",
     "score": "Score is preserved as text exactly as provided by Kaggle.",
+    "late_submission": "A completed post-deadline My Submissions result; it is not an official rank.",
     "medal_candidate": "Rank-only estimate; eligibility is not guaranteed."
   }
 }

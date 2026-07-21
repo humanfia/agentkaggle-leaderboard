@@ -19,10 +19,16 @@ class FixtureConsistencyTests(unittest.TestCase):
 
         competitions = payload["competitions"]
         entries = [entry for competition in competitions for entry in competition["entries"]]
+        late_submissions = payload["late_submissions"]
         summary = payload["summary"]
         self.assertEqual(summary["matched_competition_count"], len(competitions))
         self.assertEqual(summary["participation_count"], len(entries))
         self.assertEqual(summary["tracked_team_count"], len(payload["teams"]))
+        self.assertEqual(summary["late_submission_count"], len(late_submissions))
+        self.assertEqual(
+            summary["late_submission_competition_count"],
+            len({entry["competition_slug"] for entry in late_submissions}),
+        )
         self.assertTrue(all(competition["entries"] for competition in competitions))
 
         for competition in competitions:
@@ -38,6 +44,9 @@ class FixtureConsistencyTests(unittest.TestCase):
 
         for team in payload["teams"]:
             team_entries = [entry for entry in entries if entry["team_name"] == team["name"]]
+            team_late_submissions = [
+                entry for entry in late_submissions if entry["team_name"] == team["name"]
+            ]
             self.assertEqual(team["competition_count"], len(team_entries))
             self.assertEqual(
                 team["best_rank"],
@@ -56,6 +65,7 @@ class FixtureConsistencyTests(unittest.TestCase):
                     for entry in team_entries
                 ),
             )
+            self.assertEqual(team["late_submission_count"], len(team_late_submissions))
 
 
 if __name__ == "__main__":
