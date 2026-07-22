@@ -11,7 +11,14 @@ from .builder import _safe_failure_kind, build_leaderboard
 from .kaggle_source import KaggleCompetitionSource, authenticated_kaggle_api
 from .late_submissions import KaggleLateSubmissionSource
 from .output import write_json_atomic
-from .settings import ConfigurationError, Settings, merge_team_names, normalize_team_name
+from .settings import (
+    ConfigurationError,
+    KaggleCredential,
+    Settings,
+    credential_secret_values,
+    merge_team_names,
+    normalize_team_name,
+)
 
 
 LOGGER = logging.getLogger("agentkaggle_leaderboard")
@@ -46,11 +53,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _mask_api_tokens(api_tokens: tuple[str, ...]) -> None:
+def _mask_api_credentials(api_credentials: tuple[KaggleCredential, ...]) -> None:
     if os.environ.get("GITHUB_ACTIONS") != "true":
         return
-    for token in api_tokens:
-        print(f"::add-mask::{token}")
+    for credential in api_credentials:
+        for secret_value in credential_secret_values(credential):
+            print(f"::add-mask::{secret_value}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         settings = Settings.from_environment()
-        _mask_api_tokens(settings.api_tokens)
+        _mask_api_credentials(settings.api_tokens)
         primary_api = authenticated_kaggle_api(settings.api_tokens[0])
         last_reported = 0
 
@@ -78,15 +86,19 @@ def main(argv: list[str] | None = None) -> int:
             else set()
         )
         if not args.skip_late_submissions:
-            for index, token in enumerate(settings.api_tokens):
+            for index, credential in enumerate(settings.api_tokens):
                 try:
-                    api = primary_api if index == 0 else authenticated_kaggle_api(token)
+                    api = (
+                        primary_api
+                        if index == 0
+                        else authenticated_kaggle_api(credential)
+                    )
                     scan = KaggleLateSubmissionSource(
                         api,
                         min_request_interval_seconds=settings.request_interval_seconds,
                     ).collect(
                         settings.normalized_teams,
-                        discover_teams=token in discovery_tokens,
+                        discover_teams=credential in discovery_tokens,
                     )
                     late_submissions.extend(scan.entries)
                     discovered_team_names.extend(scan.discovered_team_names)

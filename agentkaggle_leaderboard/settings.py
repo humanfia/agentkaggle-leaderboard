@@ -12,6 +12,18 @@ class ConfigurationError(ValueError):
     """Raised for invalid configuration without echoing secret values."""
 
 
+@dataclass(frozen=True, slots=True, repr=False)
+class LegacyKaggleCredential:
+    username: str
+    key: str = field(repr=False)
+
+    def __repr__(self) -> str:
+        return "<LegacyKaggleCredential>"
+
+
+KaggleCredential = str | LegacyKaggleCredential
+
+
 def normalize_team_name(value: str) -> str:
     return unicodedata.normalize("NFKC", value).strip().casefold()
 
@@ -69,6 +81,48 @@ def parse_api_tokens(single_token: str | None, raw_tokens: str | None) -> tuple[
     return tokens
 
 
+def parse_legacy_credentials(raw_credentials: str | None) -> tuple[LegacyKaggleCredential, ...]:
+    if not raw_credentials or not raw_credentials.strip():
+        return ()
+    try:
+        parsed = json.loads(raw_credentials)
+    except json.JSONDecodeError as exc:
+        raise ConfigurationError(
+            "KAGGLE_LEGACY_CREDENTIALS is not a valid JSON array"
+        ) from exc
+    if not isinstance(parsed, list):
+        raise ConfigurationError(
+            "KAGGLE_LEGACY_CREDENTIALS JSON must be an array of username/key objects"
+        )
+
+    credentials: list[LegacyKaggleCredential] = []
+    for item in parsed:
+        if not isinstance(item, dict) or set(item) != {"username", "key"}:
+            raise ConfigurationError(
+                "KAGGLE_LEGACY_CREDENTIALS JSON must be an array of username/key objects"
+            )
+        username = item["username"]
+        key = item["key"]
+        if not isinstance(username, str) or not isinstance(key, str):
+            raise ConfigurationError(
+                "KAGGLE_LEGACY_CREDENTIALS username and key values must be strings"
+            )
+        username = username.strip()
+        key = key.strip()
+        if not username or not key:
+            raise ConfigurationError(
+                "KAGGLE_LEGACY_CREDENTIALS username and key values must not be empty"
+            )
+        credentials.append(LegacyKaggleCredential(username=username, key=key))
+    return tuple(dict.fromkeys(credentials))
+
+
+def credential_secret_values(credential: KaggleCredential) -> tuple[str, ...]:
+    if isinstance(credential, LegacyKaggleCredential):
+        return (credential.key,)
+    return (credential,)
+
+
 def merge_team_names(
     configured_names: tuple[str, ...],
     discovered_names: tuple[str, ...] | list[str],
@@ -124,8 +178,10 @@ class Settings:
     teams: tuple[str, ...]
     workers: int = 2
     request_interval_seconds: float = 2.0
-    api_tokens: tuple[str, ...] = field(default=(), repr=False, compare=False)
-    team_discovery_api_tokens: tuple[str, ...] = field(default=(), repr=False, compare=False)
+    api_tokens: tuple[KaggleCredential, ...] = field(default=(), repr=False, compare=False)
+    team_discovery_api_tokens: tuple[KaggleCredential, ...] = field(
+        default=(), repr=False, compare=False
+    )
     auto_discover_teams: bool = False
 
     @property
@@ -143,13 +199,30 @@ class Settings:
             raise ConfigurationError(
                 "KAGGLE_TEAMS is required unless KAGGLE_AUTO_DISCOVER_TEAMS is true"
             )
+        single_api_token = os.environ.get("KAGGLE_API_TOKEN")
         raw_api_tokens = os.environ.get("KAGGLE_API_TOKENS")
-        api_tokens = parse_api_tokens(
-            os.environ.get("KAGGLE_API_TOKEN"),
-            raw_api_tokens,
-        )
         contributor_tokens = parse_api_token_array(raw_api_tokens)
-        team_discovery_api_tokens = contributor_tokens or api_tokens
+        modern_candidates: list[str] = []
+        if single_api_token and single_api_token.strip():
+            modern_candidates.append(single_api_token.strip())
+        modern_candidates.extend(contributor_tokens)
+        modern_api_tokens = tuple(dict.fromkeys(modern_candidates))
+        legacy_credentials = parse_legacy_credentials(
+            os.environ.get("KAGGLE_LEGACY_CREDENTIALS")
+        )
+        api_tokens: tuple[KaggleCredential, ...] = tuple(
+            dict.fromkeys((*modern_api_tokens, *legacy_credentials))
+        )
+        if not api_tokens:
+            raise ConfigurationError(
+                "KAGGLE_API_TOKEN, KAGGLE_API_TOKENS, or "
+                "KAGGLE_LEGACY_CREDENTIALS is required"
+            )
+        contributor_credentials: tuple[KaggleCredential, ...] = (
+            *contributor_tokens,
+            *legacy_credentials,
+        )
+        team_discovery_api_tokens = contributor_credentials or api_tokens
         workers = _parse_positive_int("KAGGLE_SCAN_WORKERS", default=2, maximum=16)
         request_interval_seconds = _parse_positive_float(
             "KAGGLE_REQUEST_INTERVAL_SECONDS", default=2.0, maximum=10

@@ -11,6 +11,7 @@ FORBIDDEN_SUFFIXES = {".csv", ".env", ".key", ".log", ".zip"}
 FORBIDDEN_MARKERS = (
     b"KAGGLE_API_TOKEN",
     b"KAGGLE_API_TOKENS",
+    b"KAGGLE_LEGACY_CREDENTIALS",
     b"KAGGLE_USERNAME",
     b"KAGGLE_KEY",
     b"TeamMemberUserNames",
@@ -67,26 +68,69 @@ def scan(
     return findings
 
 
+def credential_values_from_environment() -> tuple[str, ...]:
+    credentials: list[str] = []
+    single_token = os.environ.get("KAGGLE_API_TOKEN")
+    if single_token and single_token.strip():
+        credentials.append(single_token.strip())
+
+    raw_tokens = os.environ.get("KAGGLE_API_TOKENS")
+    if raw_tokens and raw_tokens.strip():
+        try:
+            parsed_tokens = json.loads(raw_tokens)
+        except json.JSONDecodeError as exc:
+            raise ValueError("KAGGLE_API_TOKENS is not a valid JSON array") from exc
+        if not isinstance(parsed_tokens, list) or not all(
+            isinstance(item, str) for item in parsed_tokens
+        ):
+            raise ValueError("KAGGLE_API_TOKENS JSON must be an array of strings")
+        credentials.extend(item.strip() for item in parsed_tokens if item.strip())
+
+    raw_legacy_credentials = os.environ.get("KAGGLE_LEGACY_CREDENTIALS")
+    if raw_legacy_credentials and raw_legacy_credentials.strip():
+        try:
+            parsed_legacy_credentials = json.loads(raw_legacy_credentials)
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                "KAGGLE_LEGACY_CREDENTIALS is not a valid JSON array"
+            ) from exc
+        if not isinstance(parsed_legacy_credentials, list):
+            raise ValueError(
+                "KAGGLE_LEGACY_CREDENTIALS JSON must be an array of username/key objects"
+            )
+        for item in parsed_legacy_credentials:
+            if not isinstance(item, dict) or set(item) != {"username", "key"}:
+                raise ValueError(
+                    "KAGGLE_LEGACY_CREDENTIALS JSON must be an array of "
+                    "username/key objects"
+                )
+            username = item["username"]
+            key = item["key"]
+            if (
+                not isinstance(username, str)
+                or not isinstance(key, str)
+                or not username.strip()
+                or not key.strip()
+            ):
+                raise ValueError(
+                    "KAGGLE_LEGACY_CREDENTIALS username and key values must be "
+                    "non-empty strings"
+                )
+            credentials.append(key.strip())
+
+    return tuple(dict.fromkeys(credentials))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check a Pages artifact for credential or raw-field leaks")
     parser.add_argument("paths", nargs="+", type=Path)
     args = parser.parse_args(argv)
-    tokens = []
-    single_token = os.environ.get("KAGGLE_API_TOKEN")
-    if single_token:
-        tokens.append(single_token)
-    raw_tokens = os.environ.get("KAGGLE_API_TOKENS")
-    if raw_tokens:
-        try:
-            parsed = json.loads(raw_tokens)
-        except json.JSONDecodeError:
-            print("ERROR KAGGLE_API_TOKENS is not valid JSON")
-            return 1
-        if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
-            print("ERROR KAGGLE_API_TOKENS must be a JSON array of strings")
-            return 1
-        tokens.extend(parsed)
-    findings = scan(args.paths, tuple(dict.fromkeys(tokens)))
+    try:
+        credential_values = credential_values_from_environment()
+    except ValueError as exc:
+        print(f"ERROR {exc}")
+        return 1
+    findings = scan(args.paths, credential_values)
     if findings:
         for finding in findings:
             print(f"ERROR {finding}")

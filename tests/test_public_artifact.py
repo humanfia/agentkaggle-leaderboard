@@ -3,8 +3,9 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from scripts.check_public_artifact import scan
+from scripts.check_public_artifact import credential_values_from_environment, scan
 
 
 class PublicArtifactTests(unittest.TestCase):
@@ -36,6 +37,41 @@ class PublicArtifactTests(unittest.TestCase):
         self.assertIn("credential value found", rendered)
         self.assertNotIn(tokens[0], rendered)
         self.assertNotIn(tokens[1], rendered)
+
+    def test_legacy_key_is_loaded_for_artifact_scanning(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "KAGGLE_API_TOKENS": '["modern-token-123456"]',
+                "KAGGLE_LEGACY_CREDENTIALS": (
+                    '[{"username":"apostle715","key":"legacy-key-123456"}]'
+                ),
+            },
+            clear=True,
+        ):
+            values = credential_values_from_environment()
+
+        self.assertEqual(values, ("modern-token-123456", "legacy-key-123456"))
+
+    def test_malformed_legacy_secret_is_rejected_without_echoing_values(self) -> None:
+        secret = "legacy-key-not-for-errors"
+        with (
+            patch.dict(
+                "os.environ",
+                {
+                    "KAGGLE_LEGACY_CREDENTIALS": (
+                        '[{"username":"apostle715","key":"'
+                        + secret
+                        + '","extra":"bad"}]'
+                    )
+                },
+                clear=True,
+            ),
+            self.assertRaises(ValueError) as raised,
+        ):
+            credential_values_from_environment()
+
+        self.assertNotIn(secret, str(raised.exception))
 
     def test_unknown_file_type_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

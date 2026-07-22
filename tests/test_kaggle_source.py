@@ -23,6 +23,7 @@ from agentkaggle_leaderboard.kaggle_source import (
     validate_leaderboard_visibility,
 )
 from agentkaggle_leaderboard.models import Competition, LeaderboardSnapshot
+from agentkaggle_leaderboard.settings import LegacyKaggleCredential
 
 
 class KaggleSourceTests(unittest.TestCase):
@@ -96,6 +97,67 @@ class KaggleSourceTests(unittest.TestCase):
 
         self.assertEqual(observed_tokens, ["temporary-token"])
         self.assertEqual(restored_token, "previous-token")
+
+    def test_legacy_authentication_isolated_from_modern_tokens_and_local_config(self) -> None:
+        observed: dict[str, object] = {}
+
+        class FakeKaggleApi:
+            config = "/home/example/.kaggle/kaggle.json"
+
+            def authenticate(self) -> None:
+                access_token_path = Path(os.environ["KAGGLE_API_TOKEN"])
+                observed.update(
+                    username=os.environ.get("KAGGLE_USERNAME"),
+                    key=os.environ.get("KAGGLE_KEY"),
+                    access_token_file_exists=access_token_path.is_file(),
+                    access_token_file_contents=access_token_path.read_text(encoding="utf-8"),
+                    aggregate_tokens=os.environ.get("KAGGLE_API_TOKENS"),
+                    aggregate_legacy=os.environ.get("KAGGLE_LEGACY_CREDENTIALS"),
+                    config=self.config,
+                    config_exists=Path(self.config).exists(),
+                )
+
+        kaggle_module = ModuleType("kaggle")
+        kaggle_module.__path__ = []
+        api_module = ModuleType("kaggle.api")
+        api_module.__path__ = []
+        extended_module = ModuleType("kaggle.api.kaggle_api_extended")
+        extended_module.KaggleApi = FakeKaggleApi
+        original_environment = {
+            "KAGGLE_API_TOKEN": "previous-token",
+            "KAGGLE_API_TOKENS": '["modern-token"]',
+            "KAGGLE_LEGACY_CREDENTIALS": "legacy-secret-json",
+            "KAGGLE_USERNAME": "previous-user",
+            "KAGGLE_KEY": "previous-key",
+        }
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "kaggle": kaggle_module,
+                    "kaggle.api": api_module,
+                    "kaggle.api.kaggle_api_extended": extended_module,
+                },
+            ),
+            patch.dict("os.environ", original_environment, clear=True),
+        ):
+            authenticated_kaggle_api(
+                LegacyKaggleCredential("apostle715", "legacy-key")
+            )
+            restored_environment = {
+                name: os.environ.get(name) for name in original_environment
+            }
+
+        self.assertEqual(observed["username"], "apostle715")
+        self.assertEqual(observed["key"], "legacy-key")
+        self.assertTrue(observed["access_token_file_exists"])
+        self.assertEqual(observed["access_token_file_contents"], "")
+        self.assertIsNone(observed["aggregate_tokens"])
+        self.assertIsNone(observed["aggregate_legacy"])
+        self.assertFalse(observed["config_exists"])
+        self.assertNotEqual(observed["config"], FakeKaggleApi.config)
+        self.assertEqual(restored_environment, original_environment)
 
     def test_rejected_token_becomes_a_safe_authentication_error(self) -> None:
         class FakeKaggleApi:

@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 from requests import exceptions as requests_exceptions
 
 from .models import Competition, LeaderboardEntry, LeaderboardSnapshot
-from .settings import normalize_team_name
+from .settings import KaggleCredential, LegacyKaggleCredential, normalize_team_name
 
 
 _SLUG_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
@@ -94,24 +94,45 @@ def validate_leaderboard_visibility(
         )
 
 
-def authenticated_kaggle_api(api_token: str):
-    """Authenticate one isolated SDK instance without leaving its token in the environment."""
+def authenticated_kaggle_api(credential: KaggleCredential):
+    """Authenticate one isolated SDK instance without retaining credential environment state."""
     from kaggle.api.kaggle_api_extended import KaggleApi
 
-    previous_token = os.environ.get("KAGGLE_API_TOKEN")
-    os.environ["KAGGLE_API_TOKEN"] = api_token
-    try:
-        api = KaggleApi()
+    credential_variables = (
+        "KAGGLE_API_TOKEN",
+        "KAGGLE_API_TOKENS",
+        "KAGGLE_LEGACY_CREDENTIALS",
+        "KAGGLE_USERNAME",
+        "KAGGLE_KEY",
+    )
+    previous_values = {name: os.environ.get(name) for name in credential_variables}
+
+    with tempfile.TemporaryDirectory(prefix="kaggle-auth-") as temp_dir:
         try:
-            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-                api.authenticate()
-        except SystemExit as exc:
-            raise KaggleAuthenticationError("Kaggle rejected an API token") from exc
-    finally:
-        if previous_token is None:
-            os.environ.pop("KAGGLE_API_TOKEN", None)
-        else:
-            os.environ["KAGGLE_API_TOKEN"] = previous_token
+            for name in credential_variables:
+                os.environ.pop(name, None)
+            api = KaggleApi()
+            api.config = str(Path(temp_dir, "kaggle.json"))
+            if isinstance(credential, LegacyKaggleCredential):
+                empty_access_token = Path(temp_dir, "access_token")
+                empty_access_token.write_text("", encoding="utf-8")
+                os.environ["KAGGLE_API_TOKEN"] = str(empty_access_token)
+                os.environ["KAGGLE_USERNAME"] = credential.username
+                os.environ["KAGGLE_KEY"] = credential.key
+            else:
+                os.environ["KAGGLE_API_TOKEN"] = credential
+
+            try:
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    api.authenticate()
+            except SystemExit as exc:
+                raise KaggleAuthenticationError("Kaggle rejected a credential") from exc
+        finally:
+            for name, value in previous_values.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
     return api
 
 
