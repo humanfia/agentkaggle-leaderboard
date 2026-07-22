@@ -385,6 +385,13 @@ class KaggleCompetitionSource(_KaggleRequestSource):
             kind=kind,
             matches=ordered_matches,
             score_order=_infer_score_order(list(best_score_by_team.values())),
+            score_values=tuple(
+                score
+                for _, score in sorted(
+                    best_score_by_team.values(),
+                    key=lambda value: value[0],
+                )
+            ),
         )
 
 

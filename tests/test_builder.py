@@ -158,7 +158,7 @@ class BuilderTests(unittest.TestCase):
             late_submission_failure_kinds=("access_denied",),
         )
 
-        self.assertEqual(payload["schema_version"], 3)
+        self.assertEqual(payload["schema_version"], 4)
         self.assertEqual(payload["summary"]["late_submission_account_count"], 2)
         self.assertEqual(payload["summary"]["failed_late_submission_account_count"], 1)
         self.assertEqual(payload["summary"]["late_submission_competition_count"], 1)
@@ -223,6 +223,7 @@ class BuilderTests(unittest.TestCase):
                         ),
                     ),
                     score_order="lower",
+                    score_values=("0.05", "0.20", "0.40"),
                 )
 
         better_older = LateSubmissionEntry(
@@ -261,6 +262,9 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(competition_entry["score"], "0.20")
         self.assertEqual(competition_entry["late_public_score"], "0.15")
         self.assertEqual(competition_entry["late_private_score"], "0.10")
+        self.assertEqual(competition_entry["late_rank"], 2)
+        self.assertEqual(competition_entry["late_top_percent"], 2.0)
+        self.assertEqual(competition_entry["late_rank_team_count"], 100)
         self.assertEqual(
             competition_entry["late_submission_date"],
             "2026-07-01T00:00:00Z",
@@ -268,6 +272,18 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(payload["teams"][0]["competition_count"], 1)
 
     def test_late_only_team_result_keeps_known_competition_metadata(self) -> None:
+        class RankedLateSource(FakeSource):
+            def get_leaderboard(self, competition, normalized_teams):
+                if competition.slug == "no-match":
+                    return LeaderboardSnapshot(
+                        team_count=20,
+                        kind="private",
+                        matches=(),
+                        score_order="higher",
+                        score_values=("120000", "114300", "100000"),
+                    )
+                return super().get_leaderboard(competition, normalized_teams)
+
         late_entry = LateSubmissionEntry(
             competition_slug="no-match",
             competition_title="No match",
@@ -280,7 +296,7 @@ class BuilderTests(unittest.TestCase):
         )
 
         payload = build_leaderboard(
-            FakeSource(),
+            RankedLateSource(),
             Settings(("Alpha", "Beta"), workers=2),
             generated_at=datetime(2026, 7, 17, tzinfo=timezone.utc),
             late_submissions=(late_entry,),
@@ -296,6 +312,11 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(competition["entries"][0]["team_name"], "Beta")
         self.assertIsNone(competition["entries"][0]["rank"])
         self.assertEqual(competition["entries"][0]["late_public_score"], "114302")
+        self.assertEqual(competition["entries"][0]["late_rank"], 2)
+        self.assertEqual(competition["entries"][0]["late_top_percent"], 10.0)
+        self.assertEqual(payload["late_teams"][0]["name"], "Beta")
+        self.assertEqual(payload["late_teams"][0]["position"], 1)
+        self.assertEqual(payload["ongoing_teams"][0]["name"], "Alpha")
 
     def test_public_schema_rejects_unapproved_error_categories(self) -> None:
         payload = build_leaderboard(

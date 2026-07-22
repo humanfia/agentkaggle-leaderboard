@@ -14,6 +14,8 @@ PUBLIC_KEYS = {
         "status",
         "summary",
         "teams",
+        "late_teams",
+        "ongoing_teams",
         "competitions",
         "late_submissions",
         "methodology",
@@ -34,6 +36,7 @@ PUBLIC_KEYS = {
         "error_counts",
     },
     "team": {
+        "position",
         "name",
         "competition_count",
         "best_rank",
@@ -65,6 +68,9 @@ PUBLIC_KEYS = {
         "late_public_score",
         "late_private_score",
         "late_submission_date",
+        "late_rank",
+        "late_top_percent",
+        "late_rank_team_count",
     },
     "late_submission": {
         "competition_slug",
@@ -108,8 +114,13 @@ def validate_public_payload(payload: dict[str, Any]) -> None:
     if not all(isinstance(count, int) and count > 0 for count in late_error_counts.values()):
         raise ValueError("Public payload has an invalid late submission error count")
     _require_exact_keys(payload["methodology"], PUBLIC_KEYS["methodology"], "methodology")
-    for index, team in enumerate(payload["teams"]):
-        _require_exact_keys(team, PUBLIC_KEYS["team"], f"teams[{index}]")
+    for leaderboard_name in ("teams", "late_teams", "ongoing_teams"):
+        for index, team in enumerate(payload[leaderboard_name]):
+            _require_exact_keys(
+                team,
+                PUBLIC_KEYS["team"],
+                f"{leaderboard_name}[{index}]",
+            )
     for competition_index, competition in enumerate(payload["competitions"]):
         _require_exact_keys(
             competition,

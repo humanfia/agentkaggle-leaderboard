@@ -444,6 +444,7 @@ class KaggleSourceTests(unittest.TestCase):
         self.assertEqual(snapshot.matches[0].configured_team_name, "Alpha")
         self.assertEqual(snapshot.matches[0].rank, 2)
         self.assertEqual(snapshot.matches[0].score, "0.876543210")
+        self.assertEqual(snapshot.score_values, ("0.999", "0.876543210"))
         self.assertNotIn("private-field", repr(snapshot))
 
     def test_archive_reader_uses_best_rank_and_counts_each_team_once(self) -> None:
@@ -486,6 +487,7 @@ class KaggleSourceTests(unittest.TestCase):
         self.assertEqual(snapshot.matches[0].rank, 2)
         self.assertEqual(snapshot.matches[0].score, "0.2")
         self.assertEqual(snapshot.score_order, "lower")
+        self.assertEqual(snapshot.score_values, ("0.1", "0.2"))
 
 
 if __name__ == "__main__":

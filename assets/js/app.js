@@ -32,6 +32,31 @@
     element.textContent = formatDate(element.dateTime, true);
   });
 
+  const teamBoardTabs = [...document.querySelectorAll("[data-team-board-target]")];
+  const teamBoards = [...document.querySelectorAll("[data-team-board]")];
+  const selectTeamBoard = (name, focus = false) => {
+    teamBoardTabs.forEach((tab) => {
+      const selected = tab.dataset.teamBoardTarget === name;
+      tab.setAttribute("aria-selected", String(selected));
+      tab.tabIndex = selected ? 0 : -1;
+      if (selected && focus) tab.focus();
+    });
+    teamBoards.forEach((board) => {
+      board.hidden = board.dataset.teamBoard !== name;
+    });
+  };
+  teamBoardTabs.forEach((tab, index) => {
+    tab.addEventListener("click", () => selectTeamBoard(tab.dataset.teamBoardTarget));
+    tab.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      const offset = event.key === "ArrowRight" ? 1 : -1;
+      const nextIndex = (index + offset + teamBoardTabs.length) % teamBoardTabs.length;
+      selectTeamBoard(teamBoardTabs[nextIndex].dataset.teamBoardTarget, true);
+    });
+  });
+  if (teamBoardTabs.length) selectTeamBoard("overall");
+
   if (!cards.length || !search || !teamFilter || !categoryFilter || !stateFilter) return;
 
   [...new Set(cards.map((card) => card.dataset.category).filter(Boolean))]

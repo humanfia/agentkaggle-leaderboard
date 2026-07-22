@@ -108,22 +108,66 @@
               <p class="eyebrow">TEAM PULSE</p>
               <h2 id="team-summary-title">团队概览</h2>
             </div>
-            <p>比赛数包含进行中、已结束及 late-only 比赛；平均 Top% 只使用每场最佳官方名次。</p>
+            <div class="summary-tabs" role="tablist" aria-label="团队榜单">
+              <button type="button" role="tab" aria-selected="true" aria-controls="team-board-overall" data-team-board-target="overall">总榜</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="team-board-late" data-team-board-target="late">Late 榜</button>
+              <button type="button" role="tab" aria-selected="false" aria-controls="team-board-ongoing" data-team-board-target="ongoing">Ongoing 榜</button>
+            </div>
           </div>
-          <div class="table-wrap">
+          <p class="late-rank-note">* Late Submission 推算位次：将赛后分数与该比赛完整榜单分数比较，不是 Kaggle 官方 Rank。</p>
+          <div id="team-board-overall" class="table-wrap team-board" data-team-board="overall" role="tabpanel">
             <table class="summary-table">
               <thead>
-                <tr><th scope="col">团队</th><th scope="col">比赛</th><th scope="col">最佳名次</th><th scope="col">平均 Top%</th><th scope="col">奖牌候选区</th><th scope="col">赛后结果</th></tr>
+                <tr><th scope="col">总榜*</th><th scope="col">团队</th><th scope="col">比赛</th><th scope="col">最佳位次*</th><th scope="col">平均 Top%*</th><th scope="col">奖牌候选区</th><th scope="col">赛后结果</th></tr>
               </thead>
               <tbody>
                 {{ range $data.teams }}
                   <tr>
+                    <td>{{ if .position }}#{{ .position }}*{{ else }}—{{ end }}</td>
                     <th scope="row"><span class="team-dot" aria-hidden="true"></span>{{ .name }}</th>
                     <td>{{ .competition_count }}</td>
                     <td>{{ if .best_rank }}#{{ .best_rank }}{{ else }}—{{ end }}</td>
                     <td>{{ if ne .average_top_percent nil }}{{ lang.FormatNumberCustom 2 .average_top_percent }}%{{ else }}—{{ end }}</td>
                     <td>{{ .medal_candidate_count }}</td>
                     <td>{{ .late_submission_count }}</td>
+                  </tr>
+                {{ end }}
+              </tbody>
+            </table>
+          </div>
+          <div id="team-board-late" class="table-wrap team-board" data-team-board="late" role="tabpanel" hidden>
+            <table class="summary-table">
+              <thead>
+                <tr><th scope="col">Late 榜*</th><th scope="col">团队</th><th scope="col">Late 比赛</th><th scope="col">最佳位次*</th><th scope="col">平均 Top%*</th><th scope="col">赛后结果</th></tr>
+              </thead>
+              <tbody>
+                {{ range $data.late_teams }}
+                  <tr>
+                    <td>{{ if .position }}#{{ .position }}*{{ else }}—{{ end }}</td>
+                    <th scope="row"><span class="team-dot" aria-hidden="true"></span>{{ .name }}</th>
+                    <td>{{ .competition_count }}</td>
+                    <td>{{ if .best_rank }}#{{ .best_rank }}*{{ else }}—{{ end }}</td>
+                    <td>{{ if ne .average_top_percent nil }}{{ lang.FormatNumberCustom 2 .average_top_percent }}%*{{ else }}—{{ end }}</td>
+                    <td>{{ .late_submission_count }}</td>
+                  </tr>
+                {{ end }}
+              </tbody>
+            </table>
+          </div>
+          <div id="team-board-ongoing" class="table-wrap team-board" data-team-board="ongoing" role="tabpanel" hidden>
+            <table class="summary-table">
+              <thead>
+                <tr><th scope="col">Ongoing 榜</th><th scope="col">团队</th><th scope="col">正式比赛</th><th scope="col">最佳官方名次</th><th scope="col">平均 Top%</th><th scope="col">奖牌候选区</th></tr>
+              </thead>
+              <tbody>
+                {{ range $data.ongoing_teams }}
+                  <tr>
+                    <td>{{ if .position }}#{{ .position }}{{ else }}—{{ end }}</td>
+                    <th scope="row"><span class="team-dot" aria-hidden="true"></span>{{ .name }}</th>
+                    <td>{{ .competition_count }}</td>
+                    <td>{{ if .best_rank }}#{{ .best_rank }}{{ else }}—{{ end }}</td>
+                    <td>{{ if ne .average_top_percent nil }}{{ lang.FormatNumberCustom 2 .average_top_percent }}%{{ else }}—{{ end }}</td>
+                    <td>{{ .medal_candidate_count }}</td>
                   </tr>
                 {{ end }}
               </tbody>
@@ -189,11 +233,11 @@
                       <tr class="score-groups">
                         <th scope="col" rowspan="2">团队</th>
                         <th scope="colgroup" colspan="5">官方榜单</th>
-                        <th scope="colgroup" colspan="3">赛后最佳</th>
+                        <th scope="colgroup" colspan="5">赛后最佳*</th>
                       </tr>
                       <tr>
                         <th scope="col">位次</th><th scope="col">Top%</th><th scope="col">分数</th><th scope="col">奖牌候选</th><th scope="col">提交时间</th>
-                        <th scope="col">Public Score</th><th scope="col">Private Score</th><th scope="col">提交时间</th>
+                        <th scope="col">位次*</th><th scope="col">Top%*</th><th scope="col">Public Score</th><th scope="col">Private Score</th><th scope="col">提交时间</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -211,6 +255,8 @@
                             {{ else }}<span class="medal medal-none">—</span>{{ end }}
                           </td>
                           <td>{{ with .submission_date }}<time class="local-date" datetime="{{ . }}">{{ . }}</time>{{ else }}—{{ end }}</td>
+                          <td class="late-score">{{ if .late_rank }}<strong class="rank-number">#{{ .late_rank }}*</strong><span class="rank-denominator"> / {{ .late_rank_team_count }}</span>{{ else }}—{{ end }}</td>
+                          <td class="late-score">{{ if ne .late_top_percent nil }}<span class="percent-pill late-percent-pill">Top {{ lang.FormatNumberCustom 2 .late_top_percent }}%*</span>{{ else }}—{{ end }}</td>
                           <td class="late-score"><code class="score">{{ if .late_public_score }}{{ .late_public_score }}{{ else }}—{{ end }}</code></td>
                           <td class="late-score"><code class="score">{{ if .late_private_score }}{{ .late_private_score }}{{ else }}—{{ end }}</code></td>
                           <td class="late-score">{{ with .late_submission_date }}<time class="local-date" datetime="{{ . }}">{{ . }}</time>{{ else }}—{{ end }}</td>
