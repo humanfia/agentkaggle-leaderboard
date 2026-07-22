@@ -99,10 +99,11 @@ class LateSubmissionSourceTests(unittest.TestCase):
             return pages[page_token]
 
         source._list_submission_page = list_page
-        entries = source.collect(
+        scan = source.collect(
             {"alpha": "Alpha"},
             now=datetime(2026, 7, 1, tzinfo=timezone.utc),
         )
+        entries = scan.entries
 
         self.assertEqual(page_calls, ["", "next"])
         self.assertEqual(len(entries), 1)
@@ -130,13 +131,78 @@ class LateSubmissionSourceTests(unittest.TestCase):
             )
 
         source._list_submission_page = list_page
-        entries = source.collect(
+        scan = source.collect(
             {"alpha": "Alpha"},
             now=datetime(2026, 7, 1, tzinfo=timezone.utc),
         )
+        entries = scan.entries
 
         self.assertEqual(calls, [""])
         self.assertEqual(len(entries), 1)
+
+    def test_auto_discovery_reads_the_latest_page_of_active_competitions(self) -> None:
+        source = KaggleLateSubmissionSource(
+            SimpleNamespace(), retry_attempts=1, min_request_interval_seconds=0.000001
+        )
+        source._list_entered_competitions = lambda: [
+            competition(
+                "active",
+                datetime(2026, 8, 1, tzinfo=timezone.utc),
+                title="Active competition",
+            )
+        ]
+        calls: list[str] = []
+
+        def list_page(slug: str, page_token: str):
+            calls.append(page_token)
+            return SimpleNamespace(
+                submissions=[
+                    submission(
+                        datetime(2026, 7, 1, tzinfo=timezone.utc),
+                        team_name=" Dynamic Team ",
+                    )
+                ],
+                next_page_token="must-not-be-read",
+            )
+
+        source._list_submission_page = list_page
+        scan = source.collect(
+            {},
+            now=datetime(2026, 7, 2, tzinfo=timezone.utc),
+            discover_teams=True,
+        )
+
+        self.assertEqual(calls, [""])
+        self.assertEqual(scan.entries, ())
+        self.assertEqual(scan.discovered_team_names, ("Dynamic Team",))
+
+    def test_auto_discovery_includes_unconfigured_late_submissions(self) -> None:
+        deadline = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        source = KaggleLateSubmissionSource(
+            SimpleNamespace(), retry_attempts=1, min_request_interval_seconds=0.000001
+        )
+        source._list_entered_competitions = lambda: [
+            competition("ended", deadline, title="Ended competition")
+        ]
+        source._list_submission_page = lambda slug, page_token: SimpleNamespace(
+            submissions=[
+                submission(
+                    datetime(2026, 6, 2, tzinfo=timezone.utc),
+                    team_name="Discovered Team",
+                )
+            ],
+            next_page_token="",
+        )
+
+        scan = source.collect(
+            {},
+            now=datetime(2026, 7, 1, tzinfo=timezone.utc),
+            discover_teams=True,
+        )
+
+        self.assertEqual(scan.discovered_team_names, ("Discovered Team",))
+        self.assertEqual(len(scan.entries), 1)
+        self.assertEqual(scan.entries[0].configured_team_name, "Discovered Team")
 
     def test_repeated_submission_page_token_is_rejected(self) -> None:
         deadline = datetime(2026, 6, 1, tzinfo=timezone.utc)

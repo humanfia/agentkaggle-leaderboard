@@ -35,7 +35,7 @@
         <div>
           <p class="eyebrow">MULTI-COMPETITION INTELLIGENCE</p>
           <h1>把分散的赛场，<br><em>收进一张榜单。</em></h1>
-          <p class="hero-copy">自动扫描 Kaggle 可访问比赛，只保留命中团队的榜单；排名取自官方 CSV，Top 百分比使用实际榜单行数计算。</p>
+          <p class="hero-copy">从授权账户自动识别 team，并扫描 Kaggle 可访问比赛；排名取自官方 CSV，Top 百分比使用实际榜单行数计算。</p>
         </div>
         {{ with $data }}
           <div class="hero-orbit" aria-hidden="true">
@@ -108,7 +108,7 @@
               <p class="eyebrow">TEAM PULSE</p>
               <h2 id="team-summary-title">团队概览</h2>
             </div>
-            <p>平均 Top% 越低越靠前；不同比赛分数不可横向比较。</p>
+            <p>团队来自授权 token 自动发现与人工名单；平均 Top% 越低越靠前。</p>
           </div>
           <div class="table-wrap">
             <table class="summary-table">
@@ -244,7 +244,7 @@
           <div class="method-grid">
             <article><span>01</span><h3>官方名次</h3><p>直接读取 Kaggle 完整 leaderboard CSV 的 Rank 字段，不用数组下标推断。</p></article>
             <article><span>02</span><h3>Top 百分比</h3><p>官方 Rank ÷ 该 CSV 的有效行数 × 100；数值越小，排名越靠前。</p></article>
-            <article><span>03</span><h3>赛后提交</h3><p>读取授权账户的 My Submissions，只展示比赛截止后完成的目标团队提交。它是验证分数，不是官方榜单名次。</p></article>
+            <article><span>03</span><h3>团队与赛后提交</h3><p>从参与者 token 的 My Submissions 自动识别 team，只展示截止后完成的验证分数；它不是官方榜单名次。</p></article>
             <article><span>04</span><h3>奖牌候选</h3><p>仅在 Kaggle 标记该比赛会计入积分时，按 progression 位次区间估算。团队资格、DQ、最终验证与进行中榜单变化仍可能改变结果。</p></article>
           </div>
         </section>

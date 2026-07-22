@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from kagglesdk.competitions.types.competition_api_service import ApiListSubmissionsRequest
@@ -14,6 +15,12 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+@dataclass(frozen=True, slots=True)
+class LateSubmissionScan:
+    entries: tuple[LateSubmissionEntry, ...]
+    discovered_team_names: tuple[str, ...]
 
 
 class KaggleLateSubmissionSource(_KaggleRequestSource):
@@ -67,10 +74,14 @@ class KaggleLateSubmissionSource(_KaggleRequestSource):
         self,
         slug: str,
         title: str,
-        deadline: datetime,
+        deadline: datetime | None,
         normalized_teams: dict[str, str],
-    ) -> list[LateSubmissionEntry]:
+        *,
+        discover_teams: bool,
+        include_late_submissions: bool,
+    ) -> tuple[list[LateSubmissionEntry], dict[str, str]]:
         entries: list[LateSubmissionEntry] = []
+        discovered_teams: dict[str, str] = {}
         page_token = ""
         seen_page_tokens: set[str] = set()
 
@@ -91,11 +102,23 @@ class KaggleLateSubmissionSource(_KaggleRequestSource):
                     else min(oldest_submission, submitted_at)
                 )
                 status_name = str(getattr(submission.status, "name", "")).casefold()
-                if status_name != "complete" or submitted_at <= deadline:
+                if status_name != "complete":
                     continue
-                team_key = normalize_team_name(str(submission.team_name or ""))
+                raw_team_name = str(submission.team_name or "").strip()
+                team_key = normalize_team_name(raw_team_name)
+                if not team_key:
+                    continue
                 configured_name = normalized_teams.get(team_key)
+                if discover_teams:
+                    discovered_teams.setdefault(team_key, configured_name or raw_team_name)
+                    configured_name = configured_name or discovered_teams[team_key]
                 if configured_name is None:
+                    continue
+                if (
+                    not include_late_submissions
+                    or deadline is None
+                    or submitted_at <= deadline
+                ):
                     continue
                 entries.append(
                     LateSubmissionEntry(
@@ -111,7 +134,13 @@ class KaggleLateSubmissionSource(_KaggleRequestSource):
                 )
 
             next_page_token = str(getattr(response, "next_page_token", "") or "")
-            if oldest_submission is not None and oldest_submission <= deadline:
+            if not include_late_submissions:
+                break
+            if (
+                deadline is not None
+                and oldest_submission is not None
+                and oldest_submission <= deadline
+            ):
                 break
             if not next_page_token:
                 break
@@ -120,29 +149,38 @@ class KaggleLateSubmissionSource(_KaggleRequestSource):
             seen_page_tokens.add(next_page_token)
             page_token = next_page_token
 
-        return entries
+        return entries, discovered_teams
 
     def collect(
         self,
         normalized_teams: dict[str, str],
         *,
         now: datetime | None = None,
-    ) -> tuple[LateSubmissionEntry, ...]:
+        discover_teams: bool = False,
+    ) -> LateSubmissionScan:
         current_time = _as_utc(now or datetime.now(timezone.utc))
         collected: list[LateSubmissionEntry] = []
+        discovered_teams: dict[str, str] = {}
 
         for competition in self._list_entered_competitions():
             deadline_value = getattr(competition, "deadline", None)
-            if deadline_value is None:
-                continue
-            deadline = _as_utc(deadline_value)
-            if deadline >= current_time:
+            deadline = _as_utc(deadline_value) if deadline_value is not None else None
+            include_late_submissions = deadline is not None and deadline < current_time
+            if not discover_teams and not include_late_submissions:
                 continue
             slug = competition_slug(competition.ref)
             title = str(competition.title or slug).strip()
-            collected.extend(
-                self._competition_submissions(slug, title, deadline, normalized_teams)
+            entries, competition_teams = self._competition_submissions(
+                slug,
+                title,
+                deadline,
+                normalized_teams,
+                discover_teams=discover_teams,
+                include_late_submissions=include_late_submissions,
             )
+            collected.extend(entries)
+            for team_key, team_name in competition_teams.items():
+                discovered_teams.setdefault(team_key, team_name)
 
         unique = {
             (
@@ -154,7 +192,7 @@ class KaggleLateSubmissionSource(_KaggleRequestSource):
             ): entry
             for entry in collected
         }
-        return tuple(
+        entries = tuple(
             sorted(
                 unique.values(),
                 key=lambda entry: (
@@ -163,4 +201,8 @@ class KaggleLateSubmissionSource(_KaggleRequestSource):
                     entry.configured_team_name.casefold(),
                 ),
             )
+        )
+        return LateSubmissionScan(
+            entries=entries,
+            discovered_team_names=tuple(discovered_teams.values()),
         )

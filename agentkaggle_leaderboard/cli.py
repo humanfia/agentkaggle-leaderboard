@@ -4,13 +4,14 @@ import argparse
 import logging
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from .builder import _safe_failure_kind, build_leaderboard
 from .kaggle_source import KaggleCompetitionSource, authenticated_kaggle_api
 from .late_submissions import KaggleLateSubmissionSource
 from .output import write_json_atomic
-from .settings import ConfigurationError, Settings
+from .settings import ConfigurationError, Settings, merge_team_names, normalize_team_name
 
 
 LOGGER = logging.getLogger("agentkaggle_leaderboard")
@@ -69,17 +70,26 @@ def main(argv: list[str] | None = None) -> int:
                 last_reported = completed
 
         late_submissions = []
+        discovered_team_names: list[str] = []
         late_failure_kinds: list[str] = []
+        discovery_tokens = (
+            set(settings.team_discovery_api_tokens)
+            if settings.auto_discover_teams
+            else set()
+        )
         if not args.skip_late_submissions:
             for index, token in enumerate(settings.api_tokens):
                 try:
                     api = primary_api if index == 0 else authenticated_kaggle_api(token)
-                    late_submissions.extend(
-                        KaggleLateSubmissionSource(
-                            api,
-                            min_request_interval_seconds=settings.request_interval_seconds,
-                        ).collect(settings.normalized_teams)
+                    scan = KaggleLateSubmissionSource(
+                        api,
+                        min_request_interval_seconds=settings.request_interval_seconds,
+                    ).collect(
+                        settings.normalized_teams,
+                        discover_teams=token in discovery_tokens,
                     )
+                    late_submissions.extend(scan.entries)
+                    discovered_team_names.extend(scan.discovered_team_names)
                 except Exception as exc:
                     failure_kind = _safe_failure_kind(exc)
                     late_failure_kinds.append(failure_kind)
@@ -90,12 +100,39 @@ def main(argv: list[str] | None = None) -> int:
                         failure_kind,
                     )
 
+        effective_teams = merge_team_names(
+            settings.teams,
+            discovered_team_names if settings.auto_discover_teams else (),
+        )
+        if not effective_teams:
+            raise ConfigurationError(
+                "No team names were configured or discovered from My Submissions"
+            )
+        effective_settings = replace(settings, teams=effective_teams)
+        canonical_teams = effective_settings.normalized_teams
+        late_submissions = [
+            replace(
+                entry,
+                configured_team_name=canonical_teams[
+                    normalize_team_name(entry.configured_team_name)
+                ],
+            )
+            for entry in late_submissions
+        ]
+        if settings.auto_discover_teams:
+            LOGGER.info(
+                "Tracking %d teams (%d configured, %d auto-discovered)",
+                len(effective_teams),
+                len(settings.teams),
+                len(effective_teams) - len(settings.teams),
+            )
+
         payload = build_leaderboard(
             KaggleCompetitionSource(
                 primary_api,
                 min_request_interval_seconds=settings.request_interval_seconds,
             ),
-            settings,
+            effective_settings,
             max_competitions=args.max_competitions,
             progress=report_progress,
             late_submissions=tuple(late_submissions),

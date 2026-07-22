@@ -47,6 +47,7 @@ jobs:
           KAGGLE_TEAMS: ${{ secrets.KAGGLE_TEAMS }}
           KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
           KAGGLE_API_TOKENS: ${{ secrets.KAGGLE_API_TOKENS }}
+          KAGGLE_AUTO_DISCOVER_TEAMS: "true"
           KAGGLE_SCAN_WORKERS: "2"
           KAGGLE_REQUEST_INTERVAL_SECONDS: "2"
         run: uv run python -m agentkaggle_leaderboard --output data/leaderboard.json

@@ -4,6 +4,7 @@ from unittest.mock import patch
 from agentkaggle_leaderboard.settings import (
     ConfigurationError,
     Settings,
+    merge_team_names,
     normalize_team_name,
     parse_api_tokens,
     parse_team_names,
@@ -50,7 +51,42 @@ class SettingsTests(unittest.TestCase):
             settings = Settings.from_environment(load_local_dotenv=False)
 
         self.assertEqual(settings.api_tokens, ("token-a", "token-b"))
+        self.assertEqual(settings.team_discovery_api_tokens, ("token-a", "token-b"))
         self.assertNotIn("token-a", repr(settings))
+
+    def test_auto_discovery_allows_an_empty_manual_team_list(self) -> None:
+        with patch.dict(
+            "os.environ",
+            {
+                "KAGGLE_API_TOKEN": "primary-token",
+                "KAGGLE_API_TOKENS": '["contributor-token"]',
+                "KAGGLE_AUTO_DISCOVER_TEAMS": "true",
+            },
+            clear=True,
+        ):
+            settings = Settings.from_environment(load_local_dotenv=False)
+
+        self.assertEqual(settings.teams, ())
+        self.assertTrue(settings.auto_discover_teams)
+        self.assertEqual(settings.api_tokens, ("primary-token", "contributor-token"))
+        self.assertEqual(settings.team_discovery_api_tokens, ("contributor-token",))
+
+    def test_empty_manual_team_list_requires_auto_discovery(self) -> None:
+        with (
+            patch.dict(
+                "os.environ",
+                {"KAGGLE_API_TOKEN": "primary-token"},
+                clear=True,
+            ),
+            self.assertRaisesRegex(ConfigurationError, "AUTO_DISCOVER"),
+        ):
+            Settings.from_environment(load_local_dotenv=False)
+
+    def test_team_merge_preserves_configured_spelling_and_adds_discovered_names(self) -> None:
+        self.assertEqual(
+            merge_team_names(("Alpha",), [" ＡLPHA ", "Dynamic Team", "dynamic team"]),
+            ("Alpha", "Dynamic Team"),
+        )
 
 
 if __name__ == "__main__":
