@@ -55,7 +55,17 @@ PUBLIC_KEYS = {
         "awards_points",
         "entries",
     },
-    "entry": {"team_name", "rank", "top_percent", "score", "submission_date", "medal_candidate"},
+    "entry": {
+        "team_name",
+        "rank",
+        "top_percent",
+        "score",
+        "submission_date",
+        "medal_candidate",
+        "late_public_score",
+        "late_private_score",
+        "late_submission_date",
+    },
     "late_submission": {
         "competition_slug",
         "competition_title",

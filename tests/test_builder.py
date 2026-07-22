@@ -158,7 +158,7 @@ class BuilderTests(unittest.TestCase):
             late_submission_failure_kinds=("access_denied",),
         )
 
-        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(payload["schema_version"], 3)
         self.assertEqual(payload["summary"]["late_submission_account_count"], 2)
         self.assertEqual(payload["summary"]["failed_late_submission_account_count"], 1)
         self.assertEqual(payload["summary"]["late_submission_competition_count"], 1)
@@ -170,6 +170,19 @@ class BuilderTests(unittest.TestCase):
         beta_summary = next(team for team in payload["teams"] if team["name"] == "Beta")
         self.assertEqual(beta_summary["competition_count"], 1)
         self.assertEqual(beta_summary["late_submission_count"], 1)
+        late_competition = next(
+            competition
+            for competition in payload["competitions"]
+            if competition["slug"] == "ended-comp"
+        )
+        self.assertEqual(late_competition["leaderboard_kind"], "unavailable")
+        self.assertEqual(late_competition["leaderboard_team_count"], 0)
+        self.assertEqual(len(late_competition["entries"]), 1)
+        late_competition_entry = late_competition["entries"][0]
+        self.assertIsNone(late_competition_entry["rank"])
+        self.assertIsNone(late_competition_entry["top_percent"])
+        self.assertEqual(late_competition_entry["late_public_score"], "0.91")
+        self.assertEqual(late_competition_entry["late_private_score"], "0.87")
         self.assertEqual(
             set(payload["late_submissions"][0]),
             {
@@ -243,7 +256,46 @@ class BuilderTests(unittest.TestCase):
 
         self.assertEqual(payload["summary"]["late_submission_count"], 1)
         self.assertEqual(payload["late_submissions"][0]["private_score"], "0.10")
+        competition_entry = payload["competitions"][0]["entries"][0]
+        self.assertEqual(competition_entry["rank"], 10)
+        self.assertEqual(competition_entry["score"], "0.20")
+        self.assertEqual(competition_entry["late_public_score"], "0.15")
+        self.assertEqual(competition_entry["late_private_score"], "0.10")
+        self.assertEqual(
+            competition_entry["late_submission_date"],
+            "2026-07-01T00:00:00Z",
+        )
         self.assertEqual(payload["teams"][0]["competition_count"], 1)
+
+    def test_late_only_team_result_keeps_known_competition_metadata(self) -> None:
+        late_entry = LateSubmissionEntry(
+            competition_slug="no-match",
+            competition_title="No match",
+            competition_url="https://www.kaggle.com/competitions/no-match",
+            deadline=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            configured_team_name="Beta",
+            public_score="114302",
+            private_score="114302",
+            submission_date=datetime(2026, 7, 11, tzinfo=timezone.utc),
+        )
+
+        payload = build_leaderboard(
+            FakeSource(),
+            Settings(("Alpha", "Beta"), workers=2),
+            generated_at=datetime(2026, 7, 17, tzinfo=timezone.utc),
+            late_submissions=(late_entry,),
+            late_submission_account_count=1,
+        )
+
+        competition = next(
+            item for item in payload["competitions"] if item["slug"] == "no-match"
+        )
+        self.assertEqual(competition["category"], "Playground")
+        self.assertEqual(competition["leaderboard_kind"], "private")
+        self.assertEqual(competition["leaderboard_team_count"], 20)
+        self.assertEqual(competition["entries"][0]["team_name"], "Beta")
+        self.assertIsNone(competition["entries"][0]["rank"])
+        self.assertEqual(competition["entries"][0]["late_public_score"], "114302")
 
     def test_public_schema_rejects_unapproved_error_categories(self) -> None:
         payload = build_leaderboard(

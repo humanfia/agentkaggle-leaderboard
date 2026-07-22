@@ -19,6 +19,7 @@ class FixtureConsistencyTests(unittest.TestCase):
 
         competitions = payload["competitions"]
         entries = [entry for competition in competitions for entry in competition["entries"]]
+        official_entries = [entry for entry in entries if entry["rank"] is not None]
         late_submissions = payload["late_submissions"]
         summary = payload["summary"]
         self.assertEqual(summary["matched_competition_count"], len(competitions))
@@ -34,6 +35,12 @@ class FixtureConsistencyTests(unittest.TestCase):
         for competition in competitions:
             team_count = competition["leaderboard_team_count"]
             for entry in competition["entries"]:
+                if entry["rank"] is None:
+                    self.assertIsNone(entry["top_percent"])
+                    self.assertEqual(entry["score"], "")
+                    self.assertEqual(entry["submission_date"], "")
+                    self.assertEqual(entry["medal_candidate"], "unavailable")
+                    continue
                 self.assertEqual(entry["top_percent"], round(entry["rank"] / team_count * 100, 4))
                 expected_medal = (
                     medal_candidate(entry["rank"], team_count)
@@ -43,7 +50,9 @@ class FixtureConsistencyTests(unittest.TestCase):
                 self.assertEqual(entry["medal_candidate"], expected_medal)
 
         for team in payload["teams"]:
-            team_entries = [entry for entry in entries if entry["team_name"] == team["name"]]
+            team_entries = [
+                entry for entry in official_entries if entry["team_name"] == team["name"]
+            ]
             team_late_submissions = [
                 entry for entry in late_submissions if entry["team_name"] == team["name"]
             ]
@@ -77,6 +86,21 @@ class FixtureConsistencyTests(unittest.TestCase):
                 ),
             )
             self.assertEqual(team["late_submission_count"], len(team_late_submissions))
+
+        for late_submission in late_submissions:
+            competition = next(
+                item
+                for item in competitions
+                if item["slug"] == late_submission["competition_slug"]
+            )
+            entry = next(
+                item
+                for item in competition["entries"]
+                if item["team_name"] == late_submission["team_name"]
+            )
+            self.assertEqual(entry["late_public_score"], late_submission["public_score"])
+            self.assertEqual(entry["late_private_score"], late_submission["private_score"])
+            self.assertEqual(entry["late_submission_date"], late_submission["submission_date"])
 
 
 if __name__ == "__main__":

@@ -90,14 +90,6 @@ tbody td { color: #bfd0d4; font-size: .88rem; }
 tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
 .team-dot { display: inline-block; width: 7px; height: 7px; margin-right: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px rgba(57, 230, 176, .5); vertical-align: 1px; }
 
-.late-section { margin: 0 0 74px; padding-top: 6px; }
-.late-table-wrap { border-block: 1px solid var(--line); background: rgba(12, 26, 33, .38); }
-.late-table th:first-child { padding-left: 20px; }
-.late-table td:last-child { padding-right: 20px; }
-.late-table a { text-decoration: none; }
-.late-table a:hover { color: var(--accent-2); }
-.late-table a span { color: #638189; margin-left: 5px; font-weight: 400; }
-
 .leaderboard-section { scroll-margin-top: 30px; }
 .leaderboard-heading { margin-bottom: 18px; }
 .filters { display: grid; grid-template-columns: minmax(260px, 1fr) 190px 190px 190px; gap: 12px; padding: 12px; background: rgba(12, 26, 33, .82); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 18px; position: sticky; top: 10px; z-index: 4; box-shadow: 0 16px 36px rgba(0,0,0,.25); backdrop-filter: blur(16px); }
@@ -125,9 +117,12 @@ tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
 .competition-title h3 a:hover { color: var(--accent-2); }
 .competition-title h3 span { color: #638189; margin-left: 5px; font-weight: 400; }
 .competition-title p { margin: 4px 0 0; color: #728e95; font-size: .78rem; }
-.rank-table { border-top: 1px solid var(--line); }
+.rank-table { min-width: 1260px; border-top: 1px solid var(--line); }
 .rank-table th:first-child { padding-left: 25px; }
 .rank-table td:last-child { padding-right: 25px; }
+.score-groups th { padding-block: 10px; color: #91aab0; background: rgba(115, 213, 255, .035); border-bottom-color: var(--line-strong); }
+.score-groups th:last-child { color: var(--accent); background: rgba(57, 230, 176, .045); }
+.late-score { background: rgba(57, 230, 176, .025); }
 .rank-number { color: var(--text); font-size: 1rem; }
 .rank-denominator { color: #607b82; font-size: .74rem; }
 .percent-pill { display: inline-flex; padding: 4px 8px; border-radius: 6px; color: var(--accent); background: rgba(57, 230, 176, .08); font-weight: 700; }

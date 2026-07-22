@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "generated_at": "2026-07-17T01:00:00Z",
   "status": "partial",
   "summary": {
@@ -8,7 +8,7 @@
     "scanned_competition_count": 40,
     "failed_competition_count": 2,
     "matched_competition_count": 3,
-    "participation_count": 5,
+    "participation_count": 6,
     "late_submission_account_count": 2,
     "failed_late_submission_account_count": 0,
     "late_submission_competition_count": 1,
@@ -36,8 +36,8 @@
       "api_team_count": 1264,
       "awards_points": true,
       "entries": [
-        {"team_name": "Neural Nomads", "rank": 7, "top_percent": 0.5538, "score": "0.982731", "submission_date": "2026-07-16T08:42:00Z", "medal_candidate": "gold"},
-        {"team_name": "Gradient Guild", "rank": 54, "top_percent": 4.2722, "score": "0.971084", "submission_date": "2026-07-15T15:11:00Z", "medal_candidate": "silver"}
+        {"team_name": "Neural Nomads", "rank": 7, "top_percent": 0.5538, "score": "0.982731", "submission_date": "2026-07-16T08:42:00Z", "medal_candidate": "gold", "late_public_score": "", "late_private_score": "", "late_submission_date": ""},
+        {"team_name": "Gradient Guild", "rank": 54, "top_percent": 4.2722, "score": "0.971084", "submission_date": "2026-07-15T15:11:00Z", "medal_candidate": "silver", "late_public_score": "", "late_private_score": "", "late_submission_date": ""}
       ]
     },
     {
@@ -53,8 +53,9 @@
       "api_team_count": 1003,
       "awards_points": true,
       "entries": [
-        {"team_name": "Gradient Guild", "rank": 18, "top_percent": 1.8, "score": "0.11489231", "submission_date": "2026-06-30T21:04:00Z", "medal_candidate": "silver"},
-        {"team_name": "Bayes & Beyond", "rank": 63, "top_percent": 6.3, "score": "0.11840777", "submission_date": "2026-06-30T19:44:00Z", "medal_candidate": "bronze"}
+        {"team_name": "Gradient Guild", "rank": 18, "top_percent": 1.8, "score": "0.11489231", "submission_date": "2026-06-30T21:04:00Z", "medal_candidate": "silver", "late_public_score": "0.11277", "late_private_score": "0.11421", "late_submission_date": "2026-07-08T13:40:00Z"},
+        {"team_name": "Bayes & Beyond", "rank": 63, "top_percent": 6.3, "score": "0.11840777", "submission_date": "2026-06-30T19:44:00Z", "medal_candidate": "bronze", "late_public_score": "", "late_private_score": "", "late_submission_date": ""},
+        {"team_name": "Neural Nomads", "rank": null, "top_percent": null, "score": "", "submission_date": "", "medal_candidate": "unavailable", "late_public_score": "0.11391", "late_private_score": "0.11502", "late_submission_date": "2026-07-10T09:15:00Z"}
       ]
     },
     {
@@ -70,7 +71,7 @@
       "api_team_count": 369,
       "awards_points": false,
       "entries": [
-        {"team_name": "Neural Nomads", "rank": 10, "top_percent": 2.7100, "score": "0.83420", "submission_date": "2026-05-01T22:10:00Z", "medal_candidate": "not_eligible"}
+        {"team_name": "Neural Nomads", "rank": 10, "top_percent": 2.7100, "score": "0.83420", "submission_date": "2026-05-01T22:10:00Z", "medal_candidate": "not_eligible", "late_public_score": "", "late_private_score": "", "late_submission_date": ""}
       ]
     }
   ],

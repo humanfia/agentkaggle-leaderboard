@@ -81,14 +81,14 @@
 
         <section class="metric-grid" aria-label="榜单概览">
           <article class="metric-card metric-primary">
-            <span>命中比赛</span>
+            <span>有结果比赛</span>
             <strong>{{ $data.summary.matched_competition_count }}</strong>
-            <small>至少一个目标团队</small>
+            <small>官方或赛后分数</small>
           </article>
           <article class="metric-card">
-            <span>参赛记录</span>
+            <span>比赛团队记录</span>
             <strong>{{ $data.summary.participation_count }}</strong>
-            <small>比赛 × 团队</small>
+            <small>每场每队合并为一行</small>
           </article>
           <article class="metric-card">
             <span>扫描覆盖</span>
@@ -130,36 +130,6 @@
             </table>
           </div>
         </section>
-
-        {{ if gt $data.summary.late_submission_count 0 }}
-          <section class="late-section" aria-labelledby="late-title">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">POST-DEADLINE RESULTS</p>
-                <h2 id="late-title">赛后最佳结果</h2>
-              </div>
-              <p>每个团队、每场比赛只显示一次最佳赛后分数；它不产生官方排名或奖牌。</p>
-            </div>
-            <div class="table-wrap late-table-wrap">
-              <table class="late-table">
-                <thead>
-                  <tr><th scope="col">比赛</th><th scope="col">团队</th><th scope="col">Public Score</th><th scope="col">Private Score</th><th scope="col">提交时间</th></tr>
-                </thead>
-                <tbody>
-                  {{ range $data.late_submissions }}
-                    <tr>
-                      <th scope="row"><a href="{{ .competition_url }}" target="_blank" rel="noopener noreferrer">{{ .competition_title }}<span aria-hidden="true">↗</span></a></th>
-                      <td><span class="team-dot" aria-hidden="true"></span>{{ .team_name }}</td>
-                      <td><code class="score">{{ if .public_score }}{{ .public_score }}{{ else }}—{{ end }}</code></td>
-                      <td><code class="score">{{ if .private_score }}{{ .private_score }}{{ else }}—{{ end }}</code></td>
-                      <td><time class="local-date" datetime="{{ .submission_date }}">{{ .submission_date }}</time></td>
-                    </tr>
-                  {{ end }}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        {{ end }}
 
         <section class="leaderboard-section" aria-labelledby="leaderboard-title">
           <div class="section-heading leaderboard-heading">
@@ -205,10 +175,10 @@
                       <div class="tag-row">
                         <span class="tag tag-{{ .state }}">{{ if eq .state "active" }}进行中{{ else if eq .state "ended" }}已结束{{ else }}状态未知{{ end }}</span>
                         <span class="tag">{{ .category }}</span>
-                        <span class="tag">{{ if eq .leaderboard_kind "private" }}Private LB{{ else if eq .leaderboard_kind "public" }}Public LB{{ else }}Leaderboard{{ end }}</span>
+                        <span class="tag">{{ if eq .leaderboard_kind "private" }}Private LB{{ else if eq .leaderboard_kind "public" }}Public LB{{ else }}Official LB unavailable{{ end }}</span>
                       </div>
                       <h3><a href="{{ .url }}" target="_blank" rel="noopener noreferrer">{{ .title }}<span aria-hidden="true">↗</span></a></h3>
-                      <p>{{ .leaderboard_team_count }} 支有效榜单队伍{{ with .deadline }} · 截止 <time class="local-date" datetime="{{ . }}">{{ . }}</time>{{ end }}{{ with .reward }} · {{ . }}{{ end }}</p>
+                      <p>{{ if gt .leaderboard_team_count 0 }}{{ .leaderboard_team_count }} 支有效榜单队伍{{ else }}官方榜单团队数不可用{{ end }}{{ with .deadline }} · 截止 <time class="local-date" datetime="{{ . }}">{{ . }}</time>{{ end }}{{ with .reward }} · {{ . }}{{ end }}</p>
                     </div>
                   </div>
                 </header>
@@ -216,14 +186,22 @@
                 <div class="table-wrap">
                   <table class="rank-table">
                     <thead>
-                      <tr><th scope="col">团队</th><th scope="col">官方位次</th><th scope="col">Top%</th><th scope="col">分数</th><th scope="col">奖牌候选</th><th scope="col">提交时间</th></tr>
+                      <tr class="score-groups">
+                        <th scope="col" rowspan="2">团队</th>
+                        <th scope="colgroup" colspan="5">官方榜单</th>
+                        <th scope="colgroup" colspan="3">赛后最佳</th>
+                      </tr>
+                      <tr>
+                        <th scope="col">位次</th><th scope="col">Top%</th><th scope="col">分数</th><th scope="col">奖牌候选</th><th scope="col">提交时间</th>
+                        <th scope="col">Public Score</th><th scope="col">Private Score</th><th scope="col">提交时间</th>
+                      </tr>
                     </thead>
                     <tbody>
                       {{ range .entries }}
                         <tr data-team="{{ .team_name }}">
                           <th scope="row"><span class="team-dot" aria-hidden="true"></span>{{ .team_name }}</th>
-                          <td><strong class="rank-number">#{{ .rank }}</strong><span class="rank-denominator"> / {{ $competition.leaderboard_team_count }}</span></td>
-                          <td><span class="percent-pill">Top {{ lang.FormatNumberCustom 2 .top_percent }}%</span></td>
+                          <td>{{ if .rank }}<strong class="rank-number">#{{ .rank }}</strong><span class="rank-denominator"> / {{ $competition.leaderboard_team_count }}</span>{{ else }}—{{ end }}</td>
+                          <td>{{ if ne .top_percent nil }}<span class="percent-pill">Top {{ lang.FormatNumberCustom 2 .top_percent }}%</span>{{ else }}—{{ end }}</td>
                           <td><code class="score">{{ if .score }}{{ .score }}{{ else }}—{{ end }}</code></td>
                           <td>
                             {{ if eq .medal_candidate "gold" }}<span class="medal medal-gold"><i aria-hidden="true"></i>金牌区</span>
@@ -233,6 +211,9 @@
                             {{ else }}<span class="medal medal-none">—</span>{{ end }}
                           </td>
                           <td>{{ with .submission_date }}<time class="local-date" datetime="{{ . }}">{{ . }}</time>{{ else }}—{{ end }}</td>
+                          <td class="late-score"><code class="score">{{ if .late_public_score }}{{ .late_public_score }}{{ else }}—{{ end }}</code></td>
+                          <td class="late-score"><code class="score">{{ if .late_private_score }}{{ .late_private_score }}{{ else }}—{{ end }}</code></td>
+                          <td class="late-score">{{ with .late_submission_date }}<time class="local-date" datetime="{{ . }}">{{ . }}</time>{{ else }}—{{ end }}</td>
                         </tr>
                       {{ end }}
                     </tbody>
