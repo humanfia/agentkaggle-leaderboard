@@ -28,6 +28,14 @@ from .settings import Settings, normalize_team_name
 
 ProgressCallback = Callable[[int, int], None]
 MINIMUM_SCAN_SUCCESS_RATIO = 0.5
+EXCLUDED_COMPETITION_SLUGS = frozenset(
+    {
+        "ai-agent-security-multi-step-tool-attacks",
+        "arc-prize-2026-arc-agi-2",
+        "orbit-wars",
+        "restaurant-revenue-prediction2",
+    }
+)
 
 
 def _iso_utc(value: datetime | None) -> str:
@@ -459,14 +467,19 @@ def build_leaderboard(
         competition_slug: snapshot.score_order
         for competition_slug, snapshot in snapshots.items()
     }
-    public_late_submissions = _public_late_submissions(late_submissions, score_orders)
+    public_late_submissions = [
+        entry
+        for entry in _public_late_submissions(late_submissions, score_orders)
+        if str(entry["competition_slug"]) not in EXCLUDED_COMPETITION_SLUGS
+    ]
     late_competition_slugs = {
         str(entry["competition_slug"]) for entry in public_late_submissions
     }
     public_competitions = [
         _public_competition(competition, snapshots.get(competition.slug), generated_at)
         for competition in competitions
-        if (
+        if competition.slug not in EXCLUDED_COMPETITION_SLUGS
+        and (
             (
                 competition.slug in snapshots
                 and bool(snapshots[competition.slug].matches)

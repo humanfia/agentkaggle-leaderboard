@@ -318,6 +318,79 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(payload["late_teams"][0]["position"], 1)
         self.assertEqual(payload["ongoing_teams"][0]["name"], "Alpha")
 
+    def test_excluded_competitions_are_removed_from_all_public_results(self) -> None:
+        excluded_slugs = (
+            "restaurant-revenue-prediction2",
+            "orbit-wars",
+            "arc-prize-2026-arc-agi-2",
+            "ai-agent-security-multi-step-tool-attacks",
+        )
+
+        class ExcludedCompetitionSource:
+            def list_competitions(self, max_competitions=None):
+                slugs = ("included-competition", *excluded_slugs)
+                competitions = [
+                    Competition(
+                        slug=slug,
+                        title=slug,
+                        url=f"https://www.kaggle.com/competitions/{slug}",
+                        category="Featured",
+                        reward="",
+                        deadline=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                        api_team_count=100,
+                    )
+                    for slug in slugs
+                ]
+                return competitions[:max_competitions]
+
+            def get_leaderboard(self, competition, normalized_teams):
+                return LeaderboardSnapshot(
+                    team_count=100,
+                    kind="public",
+                    matches=(
+                        LeaderboardEntry(
+                            "Alpha", 10, "0.90", "2026-07-01T00:00:00Z"
+                        ),
+                    ),
+                    score_order="higher",
+                    score_values=("1.0", "0.90", "0.80"),
+                )
+
+        late_submissions = tuple(
+            LateSubmissionEntry(
+                competition_slug=slug,
+                competition_title=slug,
+                competition_url=f"https://www.kaggle.com/competitions/{slug}",
+                deadline=datetime(2026, 8, 1, tzinfo=timezone.utc),
+                configured_team_name="Alpha",
+                public_score="0.95",
+                private_score="0.95",
+                submission_date=datetime(2026, 7, 2, tzinfo=timezone.utc),
+            )
+            for slug in excluded_slugs
+        )
+
+        payload = build_leaderboard(
+            ExcludedCompetitionSource(),
+            Settings(("Alpha",), workers=2),
+            generated_at=datetime(2026, 7, 17, tzinfo=timezone.utc),
+            late_submissions=late_submissions,
+            late_submission_account_count=1,
+        )
+
+        self.assertEqual(
+            [competition["slug"] for competition in payload["competitions"]],
+            ["included-competition"],
+        )
+        self.assertEqual(payload["late_submissions"], [])
+        self.assertEqual(payload["summary"]["matched_competition_count"], 1)
+        self.assertEqual(payload["summary"]["late_submission_competition_count"], 0)
+        self.assertEqual(payload["summary"]["late_submission_count"], 0)
+        self.assertEqual(payload["teams"][0]["competition_count"], 1)
+        self.assertEqual(payload["late_teams"][0]["competition_count"], 0)
+        self.assertEqual(payload["ongoing_teams"][0]["competition_count"], 1)
+        validate_public_payload(payload)
+
     def test_public_schema_rejects_unapproved_error_categories(self) -> None:
         payload = build_leaderboard(
             FakeSource(),
