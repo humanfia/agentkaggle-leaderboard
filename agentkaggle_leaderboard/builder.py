@@ -8,7 +8,11 @@ from typing import Callable
 
 from requests import exceptions as requests_exceptions
 
-from .kaggle_source import InvalidKaggleResponse, UnsafePrivateLeaderboard
+from .kaggle_source import (
+    InvalidKaggleResponse,
+    KaggleAuthenticationError,
+    UnsafePrivateLeaderboard,
+)
 from .medals import medal_candidate
 from .models import (
     Competition,
@@ -43,6 +47,8 @@ def _competition_state(deadline: datetime | None, generated_at: datetime) -> str
 def _safe_failure_kind(exc: BaseException) -> str:
     status = getattr(getattr(exc, "response", None), "status_code", None)
     if status in {401, 403}:
+        return "access_denied"
+    if isinstance(exc, KaggleAuthenticationError):
         return "access_denied"
     if status == 404:
         return "not_found"

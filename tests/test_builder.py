@@ -5,7 +5,10 @@ import unittest
 from datetime import datetime, timezone
 
 from agentkaggle_leaderboard.builder import _safe_failure_kind, build_leaderboard
-from agentkaggle_leaderboard.kaggle_source import InvalidKaggleResponse
+from agentkaggle_leaderboard.kaggle_source import (
+    InvalidKaggleResponse,
+    KaggleAuthenticationError,
+)
 from agentkaggle_leaderboard.models import (
     Competition,
     LateSubmissionEntry,
@@ -169,6 +172,10 @@ class BuilderTests(unittest.TestCase):
         )
         sensitive_exception = type("SensitiveInternalException", (RuntimeError,), {})
         self.assertEqual(_safe_failure_kind(sensitive_exception("raw detail")), "unexpected")
+        self.assertEqual(
+            _safe_failure_kind(KaggleAuthenticationError("raw auth detail")),
+            "access_denied",
+        )
 
     def test_max_competitions_marks_result_truncated(self) -> None:
         payload = build_leaderboard(

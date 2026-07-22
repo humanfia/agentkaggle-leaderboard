@@ -4,6 +4,7 @@ import csv
 import io
 import os
 import re
+from contextlib import redirect_stderr, redirect_stdout
 import tempfile
 import threading
 import time
@@ -27,6 +28,10 @@ class InvalidKaggleResponse(RuntimeError):
 
 
 class UnsafePrivateLeaderboard(RuntimeError):
+    pass
+
+
+class KaggleAuthenticationError(RuntimeError):
     pass
 
 
@@ -97,7 +102,11 @@ def authenticated_kaggle_api(api_token: str):
     os.environ["KAGGLE_API_TOKEN"] = api_token
     try:
         api = KaggleApi()
-        api.authenticate()
+        try:
+            with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                api.authenticate()
+        except SystemExit as exc:
+            raise KaggleAuthenticationError("Kaggle rejected an API token") from exc
     finally:
         if previous_token is None:
             os.environ.pop("KAGGLE_API_TOKEN", None)

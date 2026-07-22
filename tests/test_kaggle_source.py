@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import os
 import sys
 import tempfile
@@ -14,6 +15,7 @@ from unittest.mock import patch
 
 from agentkaggle_leaderboard.kaggle_source import (
     InvalidKaggleResponse,
+    KaggleAuthenticationError,
     KaggleCompetitionSource,
     UnsafePrivateLeaderboard,
     authenticated_kaggle_api,
@@ -94,6 +96,36 @@ class KaggleSourceTests(unittest.TestCase):
 
         self.assertEqual(observed_tokens, ["temporary-token"])
         self.assertEqual(restored_token, "previous-token")
+
+    def test_rejected_token_becomes_a_safe_authentication_error(self) -> None:
+        class FakeKaggleApi:
+            def authenticate(self) -> None:
+                print("verbose authentication instructions")
+                raise SystemExit(1)
+
+        kaggle_module = ModuleType("kaggle")
+        kaggle_module.__path__ = []
+        api_module = ModuleType("kaggle.api")
+        api_module.__path__ = []
+        extended_module = ModuleType("kaggle.api.kaggle_api_extended")
+        extended_module.KaggleApi = FakeKaggleApi
+        visible_output = io.StringIO()
+
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "kaggle": kaggle_module,
+                    "kaggle.api": api_module,
+                    "kaggle.api.kaggle_api_extended": extended_module,
+                },
+            ),
+            patch("sys.stdout", visible_output),
+            self.assertRaises(KaggleAuthenticationError),
+        ):
+            authenticated_kaggle_api("rejected-token")
+
+        self.assertEqual(visible_output.getvalue(), "")
 
     def test_catalog_only_requests_public_groups(self) -> None:
         calls = []
