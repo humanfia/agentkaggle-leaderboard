@@ -110,6 +110,34 @@ class BuilderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unexpected or missing fields"):
             validate_public_payload(payload)
 
+    def test_each_competition_uses_only_the_best_rank_per_team(self) -> None:
+        class DuplicateTeamSource(FakeSource):
+            def list_competitions(self, max_competitions=None):
+                return self.competitions[:1]
+
+            def get_leaderboard(self, competition, normalized_teams):
+                return LeaderboardSnapshot(
+                    team_count=100,
+                    kind="public",
+                    matches=(
+                        LeaderboardEntry("Alpha", 25, "0.80", "2026-07-01T00:00:00Z"),
+                        LeaderboardEntry("Alpha", 5, "0.95", "2026-07-02T00:00:00Z"),
+                    ),
+                )
+
+        payload = build_leaderboard(
+            DuplicateTeamSource(),
+            Settings(("Alpha",), workers=1),
+            generated_at=datetime(2026, 7, 17, tzinfo=timezone.utc),
+        )
+
+        entries = payload["competitions"][0]["entries"]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["rank"], 5)
+        self.assertEqual(entries[0]["top_percent"], 5.0)
+        self.assertEqual(payload["teams"][0]["competition_count"], 1)
+        self.assertEqual(payload["teams"][0]["average_top_percent"], 5.0)
+
     def test_late_submissions_are_sanitized_deduplicated_and_counted(self) -> None:
         late_entry = LateSubmissionEntry(
             competition_slug="ended-comp",

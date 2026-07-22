@@ -8,7 +8,10 @@ from dataclasses import replace
 from pathlib import Path
 
 from .builder import _safe_failure_kind, build_leaderboard
-from .kaggle_source import KaggleCompetitionSource, authenticated_kaggle_api
+from .kaggle_source import (
+    KaggleAggregatedCompetitionSource,
+    authenticated_kaggle_api,
+)
 from .late_submissions import KaggleLateSubmissionSource
 from .output import write_json_atomic
 from .settings import (
@@ -79,6 +82,7 @@ def main(argv: list[str] | None = None) -> int:
 
         late_submissions = []
         discovered_team_names: list[str] = []
+        entered_competition_access = []
         late_failure_kinds: list[str] = []
         discovery_tokens = (
             set(settings.team_discovery_api_tokens)
@@ -102,6 +106,10 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     late_submissions.extend(scan.entries)
                     discovered_team_names.extend(scan.discovered_team_names)
+                    entered_competition_access.extend(
+                        (competition, api)
+                        for competition in scan.entered_competitions
+                    )
                 except Exception as exc:
                     failure_kind = _safe_failure_kind(exc)
                     late_failure_kinds.append(failure_kind)
@@ -140,8 +148,9 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         payload = build_leaderboard(
-            KaggleCompetitionSource(
+            KaggleAggregatedCompetitionSource(
                 primary_api,
+                entered_competition_access,
                 min_request_interval_seconds=settings.request_interval_seconds,
             ),
             effective_settings,

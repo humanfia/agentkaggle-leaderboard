@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from agentkaggle_leaderboard.kaggle_source import (
     InvalidKaggleResponse,
+    KaggleAggregatedCompetitionSource,
     KaggleAuthenticationError,
     KaggleCompetitionSource,
     UnsafePrivateLeaderboard,
@@ -260,6 +261,55 @@ class KaggleSourceTests(unittest.TestCase):
         )
         self.assertEqual(len(calls), 3)
 
+    def test_aggregated_source_adds_entered_competitions_and_routes_account_access(self) -> None:
+        public_competition = self._competition(
+            datetime(2026, 8, 1, tzinfo=timezone.utc)
+        )
+        entered_competition = Competition(
+            slug="ended-entered",
+            title="Ended entered competition",
+            url="https://www.kaggle.com/competitions/ended-entered",
+            category="Featured",
+            reward="",
+            deadline=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            api_team_count=20,
+        )
+        primary_api = SimpleNamespace(name="primary")
+        entered_api = SimpleNamespace(name="entered")
+        calls: list[tuple[str, str]] = []
+
+        class FakeCompetitionSource:
+            def __init__(self, api, **kwargs):
+                self.api = api
+
+            def list_competitions(self, max_competitions=None):
+                return [public_competition] if self.api is primary_api else []
+
+            def get_leaderboard(self, competition, normalized_teams):
+                calls.append((self.api.name, competition.slug))
+                if self.api is primary_api and competition.slug == "ended-entered":
+                    raise RuntimeError("primary account cannot access ended competition")
+                return LeaderboardSnapshot(team_count=20, kind="private", matches=())
+
+        with patch(
+            "agentkaggle_leaderboard.kaggle_source.KaggleCompetitionSource",
+            FakeCompetitionSource,
+        ):
+            source = KaggleAggregatedCompetitionSource(
+                primary_api,
+                [(entered_competition, entered_api)],
+                min_request_interval_seconds=0.000001,
+            )
+            competitions = source.list_competitions()
+            snapshot = source.get_leaderboard(entered_competition, {"alpha": "Alpha"})
+
+        self.assertEqual(
+            [competition.slug for competition in competitions],
+            ["safe-test", "ended-entered"],
+        )
+        self.assertEqual(snapshot.kind, "private")
+        self.assertEqual(calls, [("entered", "ended-entered")])
+
     def test_repeated_catalog_page_token_is_rejected(self) -> None:
         class FakeApi:
             def competitions_list(self, **kwargs):
@@ -395,6 +445,46 @@ class KaggleSourceTests(unittest.TestCase):
         self.assertEqual(snapshot.matches[0].rank, 2)
         self.assertEqual(snapshot.matches[0].score, "0.876543210")
         self.assertNotIn("private-field", repr(snapshot))
+
+    def test_archive_reader_uses_best_rank_and_counts_each_team_once(self) -> None:
+        rows = [
+            {
+                "Rank": "8",
+                "TeamId": "11",
+                "TeamName": "Alpha",
+                "Score": "0.8",
+            },
+            {
+                "Rank": "2",
+                "TeamId": "11",
+                "TeamName": "Alpha",
+                "Score": "0.95",
+            },
+            {
+                "Rank": "1",
+                "TeamId": "12",
+                "TeamName": "Other",
+                "Score": "0.99",
+            },
+        ]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir, "board.csv")
+            with csv_path.open("w", encoding="utf-8", newline="") as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+            archive_path = Path(temp_dir, "sample.zip")
+            with zipfile.ZipFile(archive_path, "w") as archive:
+                archive.write(csv_path, "sample-publicleaderboard.csv")
+
+            snapshot = KaggleCompetitionSource._read_archive(
+                archive_path, {"alpha": "Alpha"}
+            )
+
+        self.assertEqual(snapshot.team_count, 2)
+        self.assertEqual(len(snapshot.matches), 1)
+        self.assertEqual(snapshot.matches[0].rank, 2)
+        self.assertEqual(snapshot.matches[0].score, "0.95")
 
 
 if __name__ == "__main__":

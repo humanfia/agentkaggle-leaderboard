@@ -108,7 +108,7 @@
               <p class="eyebrow">TEAM PULSE</p>
               <h2 id="team-summary-title">团队概览</h2>
             </div>
-            <p>团队来自授权 token 自动发现与人工名单；平均 Top% 越低越靠前。</p>
+            <p>每场比赛只计该团队的最佳官方名次一次；平均 Top% 越低越靠前。</p>
           </div>
           <div class="table-wrap">
             <table class="summary-table">
@@ -184,12 +184,20 @@
               <span>类别</span>
               <select id="category-filter"><option value="">全部类别</option></select>
             </label>
+            <label>
+              <span>状态</span>
+              <select id="state-filter">
+                <option value="">全部状态</option>
+                <option value="active">进行中</option>
+                <option value="ended">已结束</option>
+              </select>
+            </label>
           </div>
 
           <div id="competition-list" class="competition-list">
             {{ range $data.competitions }}
               {{ $competition := . }}
-              <article class="competition-card" data-title="{{ .title | lower }}" data-category="{{ .category }}" data-teams="{{ range .entries }}{{ .team_name | lower }}|{{ end }}">
+              <article class="competition-card" data-title="{{ .title | lower }}" data-category="{{ .category }}" data-state="{{ .state }}" data-teams="{{ range .entries }}{{ .team_name | lower }}|{{ end }}">
                 <header class="competition-header">
                   <div class="competition-title">
                     <div class="competition-icon" aria-hidden="true">{{ substr .title 0 1 | upper }}</div>

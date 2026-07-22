@@ -48,6 +48,21 @@ def competition_slug(ref: str) -> str:
     return slug
 
 
+def competition_from_api(item: object) -> Competition:
+    ref = str(getattr(item, "ref", "") or "")
+    slug = competition_slug(ref)
+    return Competition(
+        slug=slug,
+        title=str(getattr(item, "title", "") or slug).strip(),
+        url=f"https://www.kaggle.com/competitions/{slug}",
+        category=str(getattr(item, "category", "") or "Unspecified").strip(),
+        reward=str(getattr(item, "reward", "") or "").strip(),
+        deadline=getattr(item, "deadline", None),
+        api_team_count=max(0, int(getattr(item, "team_count", 0) or 0)),
+        awards_points=bool(getattr(item, "awards_points", False)),
+    )
+
+
 def _as_utc_iso(value: object) -> str:
     if isinstance(value, datetime):
         if value.tzinfo is None:
@@ -236,22 +251,11 @@ class KaggleCompetitionSource(_KaggleRequestSource):
                 api_competitions = list(response.competitions or []) if response else []
 
                 for item in api_competitions:
-                    slug = competition_slug(item.ref)
-                    if slug in seen_slugs:
+                    competition = competition_from_api(item)
+                    if competition.slug in seen_slugs:
                         continue
-                    seen_slugs.add(slug)
-                    competitions.append(
-                        Competition(
-                            slug=slug,
-                            title=(item.title or slug).strip(),
-                            url=f"https://www.kaggle.com/competitions/{slug}",
-                            category=str(item.category or "Unspecified").strip(),
-                            reward=str(item.reward or "").strip(),
-                            deadline=item.deadline,
-                            api_team_count=max(0, int(item.team_count or 0)),
-                            awards_points=bool(getattr(item, "awards_points", False)),
-                        )
-                    )
+                    seen_slugs.add(competition.slug)
+                    competitions.append(competition)
                     if max_competitions is not None and len(competitions) >= max_competitions:
                         return competitions
 
@@ -312,25 +316,98 @@ class KaggleCompetitionSource(_KaggleRequestSource):
 
                 date_header = headers.get("lastsubmissiondate") or headers.get("submissiondate")
                 matches: dict[str, LeaderboardEntry] = {}
+                seen_teams: set[str] = set()
+                team_id_header = headers.get("teamid")
                 team_count = 0
-                for row in reader:
+                for row_index, row in enumerate(reader):
                     rank = _parse_rank(row.get(headers["rank"]) or "")
                     if rank == 0:
                         continue
-                    team_count += 1
                     kaggle_team_name = (row.get(headers["teamname"]) or "").strip()
                     key = normalize_team_name(kaggle_team_name)
+                    team_identity = (
+                        (row.get(team_id_header) or "").strip()
+                        if team_id_header
+                        else key
+                    ) or f"row-{row_index}"
+                    if team_identity not in seen_teams:
+                        seen_teams.add(team_identity)
+                        team_count += 1
                     configured_name = normalized_teams.get(key)
-                    if configured_name is None or key in matches:
+                    if configured_name is None:
                         continue
-                    matches[key] = LeaderboardEntry(
+                    candidate = LeaderboardEntry(
                         configured_team_name=configured_name,
                         rank=rank,
                         score=(row.get(headers["score"]) or "").strip(),
                         submission_date=_as_utc_iso(row.get(date_header) if date_header else ""),
                     )
+                    existing = matches.get(key)
+                    if existing is None or candidate.rank < existing.rank:
+                        matches[key] = candidate
 
         ordered_matches = tuple(
             sorted(matches.values(), key=lambda entry: (entry.rank, entry.configured_team_name))
         )
         return LeaderboardSnapshot(team_count=team_count, kind=kind, matches=ordered_matches)
+
+
+class KaggleAggregatedCompetitionSource:
+    """Merge public competitions with account-entered competitions and route access."""
+
+    def __init__(
+        self,
+        primary_api,
+        entered_competition_access: list[tuple[Competition, object]],
+        *,
+        min_request_interval_seconds: float = 2.0,
+    ) -> None:
+        self._primary_source = KaggleCompetitionSource(
+            primary_api,
+            min_request_interval_seconds=min_request_interval_seconds,
+        )
+        self._entered_competitions: dict[str, Competition] = {}
+        self._sources_by_slug: dict[str, list[KaggleCompetitionSource]] = {}
+        source_by_api_id = {id(primary_api): self._primary_source}
+
+        for competition, api in entered_competition_access:
+            self._entered_competitions.setdefault(competition.slug, competition)
+            source = source_by_api_id.get(id(api))
+            if source is None:
+                source = KaggleCompetitionSource(
+                    api,
+                    min_request_interval_seconds=min_request_interval_seconds,
+                )
+                source_by_api_id[id(api)] = source
+            sources = self._sources_by_slug.setdefault(competition.slug, [])
+            if source not in sources:
+                sources.append(source)
+
+    def list_competitions(self, max_competitions: int | None = None) -> list[Competition]:
+        public_competitions = self._primary_source.list_competitions(
+            max_competitions=max_competitions
+        )
+        merged = {competition.slug: competition for competition in public_competitions}
+        for slug, competition in self._entered_competitions.items():
+            merged.setdefault(slug, competition)
+        competitions = list(merged.values())
+        return competitions[:max_competitions] if max_competitions is not None else competitions
+
+    def get_leaderboard(
+        self,
+        competition: Competition,
+        normalized_teams: dict[str, str],
+    ) -> LeaderboardSnapshot:
+        sources = list(self._sources_by_slug.get(competition.slug, ()))
+        if self._primary_source not in sources:
+            sources.append(self._primary_source)
+
+        last_error: Exception | None = None
+        for source in sources:
+            try:
+                return source.get_leaderboard(competition, normalized_teams)
+            except Exception as exc:
+                last_error = exc
+        if last_error is not None:
+            raise last_error
+        raise AssertionError("competition source routing produced no candidates")

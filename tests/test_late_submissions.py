@@ -111,6 +111,10 @@ class LateSubmissionSourceTests(unittest.TestCase):
         self.assertEqual(entries[0].configured_team_name, "Alpha")
         self.assertEqual(entries[0].public_score, "0.9")
         self.assertEqual(entries[0].private_score, "0.8")
+        self.assertEqual(
+            [competition.slug for competition in scan.entered_competitions],
+            ["ended", "active"],
+        )
 
     def test_submission_pagination_stops_after_reaching_deadline(self) -> None:
         deadline = datetime(2026, 6, 1, tzinfo=timezone.utc)

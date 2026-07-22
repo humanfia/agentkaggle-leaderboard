@@ -18,10 +18,11 @@ from .models import (
     Competition,
     CompetitionSource,
     LateSubmissionEntry,
+    LeaderboardEntry,
     LeaderboardSnapshot,
     ScanFailure,
 )
-from .settings import Settings
+from .settings import Settings, normalize_team_name
 
 
 ProgressCallback = Callable[[int, int], None]
@@ -77,7 +78,17 @@ def _public_competition(
     generated_at: datetime,
 ) -> dict[str, object]:
     entries: list[dict[str, object]] = []
+    best_by_team: dict[str, LeaderboardEntry] = {}
     for entry in snapshot.matches:
+        key = normalize_team_name(entry.configured_team_name)
+        existing = best_by_team.get(key)
+        if existing is None or entry.rank < existing.rank:
+            best_by_team[key] = entry
+
+    for entry in sorted(
+        best_by_team.values(),
+        key=lambda item: (item.rank, item.configured_team_name),
+    ):
         top_percent = round((entry.rank / snapshot.team_count) * 100, 4)
         entries.append(
             {
@@ -276,7 +287,11 @@ def build_leaderboard(
         "late_submissions": public_late_submissions,
         "methodology": {
             "rank": "Official Rank from Kaggle's complete leaderboard CSV.",
-            "top_percent": "Rank divided by the number of rows in that leaderboard, multiplied by 100.",
+            "top_percent": (
+                "Each team contributes at most once per competition using its best official rank. "
+                "That rank is divided by the deduplicated number of teams in the leaderboard, "
+                "then multiplied by 100."
+            ),
             "score": "Score is preserved as text exactly as provided by Kaggle.",
             "late_submission": (
                 "A completed submission made after the competition deadline and returned by the "

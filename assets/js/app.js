@@ -5,6 +5,7 @@
   const search = document.querySelector("#search");
   const teamFilter = document.querySelector("#team-filter");
   const categoryFilter = document.querySelector("#category-filter");
+  const stateFilter = document.querySelector("#state-filter");
   const resultCount = document.querySelector("#result-count");
   const emptyState = document.querySelector("#filter-empty");
 
@@ -31,7 +32,7 @@
     element.textContent = formatDate(element.dateTime, true);
   });
 
-  if (!cards.length || !search || !teamFilter || !categoryFilter) return;
+  if (!cards.length || !search || !teamFilter || !categoryFilter || !stateFilter) return;
 
   [...new Set(cards.map((card) => card.dataset.category).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "zh-CN"))
@@ -46,13 +47,15 @@
     const query = search.value.trim().toLocaleLowerCase();
     const team = teamFilter.value;
     const category = categoryFilter.value;
+    const state = stateFilter.value;
     let visibleCount = 0;
 
     cards.forEach((card) => {
       const matchesQuery = !query || `${card.dataset.title} ${card.dataset.teams}`.includes(query);
       const matchesTeam = !team || card.querySelector(`[data-team="${CSS.escape(team)}"]`);
       const matchesCategory = !category || card.dataset.category === category;
-      const visible = Boolean(matchesQuery && matchesTeam && matchesCategory);
+      const matchesState = !state || card.dataset.state === state;
+      const visible = Boolean(matchesQuery && matchesTeam && matchesCategory && matchesState);
       card.hidden = !visible;
       if (visible) visibleCount += 1;
 
@@ -68,4 +71,5 @@
   search.addEventListener("input", applyFilters);
   teamFilter.addEventListener("change", applyFilters);
   categoryFilter.addEventListener("change", applyFilters);
+  stateFilter.addEventListener("change", applyFilters);
 })();
