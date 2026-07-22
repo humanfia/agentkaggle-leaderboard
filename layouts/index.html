@@ -96,7 +96,7 @@
             <small>共发现 {{ $data.summary.discovered_competition_count }} 场</small>
           </article>
           <article class="metric-card">
-            <span>赛后提交</span>
+            <span>赛后最佳结果</span>
             <strong>{{ $data.summary.late_submission_count }}</strong>
             <small>来自 {{ $data.summary.late_submission_account_count }} 个授权账户</small>
           </article>
@@ -108,12 +108,12 @@
               <p class="eyebrow">TEAM PULSE</p>
               <h2 id="team-summary-title">团队概览</h2>
             </div>
-            <p>每场比赛只计该团队的最佳官方名次一次；平均 Top% 越低越靠前。</p>
+            <p>比赛数包含进行中、已结束及 late-only 比赛；平均 Top% 只使用每场最佳官方名次。</p>
           </div>
           <div class="table-wrap">
             <table class="summary-table">
               <thead>
-                <tr><th scope="col">团队</th><th scope="col">比赛</th><th scope="col">最佳名次</th><th scope="col">平均 Top%</th><th scope="col">奖牌候选区</th><th scope="col">赛后提交</th></tr>
+                <tr><th scope="col">团队</th><th scope="col">比赛</th><th scope="col">最佳名次</th><th scope="col">平均 Top%</th><th scope="col">奖牌候选区</th><th scope="col">赛后结果</th></tr>
               </thead>
               <tbody>
                 {{ range $data.teams }}
@@ -136,9 +136,9 @@
             <div class="section-heading">
               <div>
                 <p class="eyebrow">POST-DEADLINE RESULTS</p>
-                <h2 id="late-title">赛后提交</h2>
+                <h2 id="late-title">赛后最佳结果</h2>
               </div>
-              <p>来自授权账户的 My Submissions。仅表示截止日期后的验证分数，不产生官方排名或奖牌。</p>
+              <p>每个团队、每场比赛只显示一次最佳赛后分数；它不产生官方排名或奖牌。</p>
             </div>
             <div class="table-wrap late-table-wrap">
               <table class="late-table">

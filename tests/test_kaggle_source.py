@@ -458,13 +458,13 @@ class KaggleSourceTests(unittest.TestCase):
                 "Rank": "2",
                 "TeamId": "11",
                 "TeamName": "Alpha",
-                "Score": "0.95",
+                "Score": "0.2",
             },
             {
                 "Rank": "1",
                 "TeamId": "12",
                 "TeamName": "Other",
-                "Score": "0.99",
+                "Score": "0.1",
             },
         ]
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -484,7 +484,8 @@ class KaggleSourceTests(unittest.TestCase):
         self.assertEqual(snapshot.team_count, 2)
         self.assertEqual(len(snapshot.matches), 1)
         self.assertEqual(snapshot.matches[0].rank, 2)
-        self.assertEqual(snapshot.matches[0].score, "0.95")
+        self.assertEqual(snapshot.matches[0].score, "0.2")
+        self.assertEqual(snapshot.score_order, "lower")
 
 
 if __name__ == "__main__":

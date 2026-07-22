@@ -5,6 +5,7 @@ import io
 import os
 import re
 from contextlib import redirect_stderr, redirect_stdout
+from decimal import Decimal, InvalidOperation
 import tempfile
 import threading
 import time
@@ -79,6 +80,31 @@ def _parse_rank(value: str) -> int:
     if rank < 0:
         raise InvalidKaggleResponse("Kaggle leaderboard contains an invalid rank")
     return rank
+
+
+def _numeric_score(value: str) -> Decimal | None:
+    try:
+        score = Decimal(value.strip())
+    except (InvalidOperation, AttributeError):
+        return None
+    return score if score.is_finite() else None
+
+
+def _infer_score_order(ranked_scores: list[tuple[int, str]]) -> str:
+    numeric_scores = sorted(
+        (
+            (rank, score)
+            for rank, raw_score in ranked_scores
+            if (score := _numeric_score(raw_score)) is not None
+        ),
+        key=lambda item: item[0],
+    )
+    for index, (better_rank, better_score) in enumerate(numeric_scores):
+        for worse_rank, worse_score in numeric_scores[index + 1 :]:
+            if worse_rank <= better_rank or better_score == worse_score:
+                continue
+            return "higher" if better_score > worse_score else "lower"
+    return "unknown"
 
 
 def _normalized_headers(fieldnames: list[str] | None) -> dict[str, str]:
@@ -317,6 +343,7 @@ class KaggleCompetitionSource(_KaggleRequestSource):
                 date_header = headers.get("lastsubmissiondate") or headers.get("submissiondate")
                 matches: dict[str, LeaderboardEntry] = {}
                 seen_teams: set[str] = set()
+                best_score_by_team: dict[str, tuple[int, str]] = {}
                 team_id_header = headers.get("teamid")
                 team_count = 0
                 for row_index, row in enumerate(reader):
@@ -333,13 +360,17 @@ class KaggleCompetitionSource(_KaggleRequestSource):
                     if team_identity not in seen_teams:
                         seen_teams.add(team_identity)
                         team_count += 1
+                    score = (row.get(headers["score"]) or "").strip()
+                    existing_score = best_score_by_team.get(team_identity)
+                    if existing_score is None or rank < existing_score[0]:
+                        best_score_by_team[team_identity] = (rank, score)
                     configured_name = normalized_teams.get(key)
                     if configured_name is None:
                         continue
                     candidate = LeaderboardEntry(
                         configured_team_name=configured_name,
                         rank=rank,
-                        score=(row.get(headers["score"]) or "").strip(),
+                        score=score,
                         submission_date=_as_utc_iso(row.get(date_header) if date_header else ""),
                     )
                     existing = matches.get(key)
@@ -349,7 +380,12 @@ class KaggleCompetitionSource(_KaggleRequestSource):
         ordered_matches = tuple(
             sorted(matches.values(), key=lambda entry: (entry.rank, entry.configured_team_name))
         )
-        return LeaderboardSnapshot(team_count=team_count, kind=kind, matches=ordered_matches)
+        return LeaderboardSnapshot(
+            team_count=team_count,
+            kind=kind,
+            matches=ordered_matches,
+            score_order=_infer_score_order(list(best_score_by_team.values())),
+        )
 
 
 class KaggleAggregatedCompetitionSource:

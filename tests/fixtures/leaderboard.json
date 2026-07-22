@@ -18,7 +18,7 @@
     "error_counts": {"access_denied": 2}
   },
   "teams": [
-    {"name": "Neural Nomads", "competition_count": 2, "best_rank": 7, "average_top_percent": 1.6319, "medal_candidate_count": 1, "late_submission_count": 1},
+    {"name": "Neural Nomads", "competition_count": 3, "best_rank": 7, "average_top_percent": 1.6319, "medal_candidate_count": 1, "late_submission_count": 1},
     {"name": "Gradient Guild", "competition_count": 2, "best_rank": 18, "average_top_percent": 3.0361, "medal_candidate_count": 2, "late_submission_count": 1},
     {"name": "Bayes & Beyond", "competition_count": 1, "best_rank": 63, "average_top_percent": 6.3, "medal_candidate_count": 1, "late_submission_count": 0}
   ],
@@ -98,9 +98,9 @@
   ],
   "methodology": {
     "rank": "Official Rank from Kaggle's complete leaderboard CSV.",
-    "top_percent": "Rank divided by the number of rows in that leaderboard, multiplied by 100.",
+    "top_percent": "Best official rank per competition divided by the deduplicated team count, multiplied by 100.",
     "score": "Score is preserved as text exactly as provided by Kaggle.",
-    "late_submission": "A completed post-deadline My Submissions result; it is not an official rank.",
+    "late_submission": "Best completed post-deadline result per team and competition; it is not an official rank.",
     "medal_candidate": "Rank-only estimate; eligibility is not guaranteed."
   }
 }

@@ -167,7 +167,9 @@ class BuilderTests(unittest.TestCase):
             payload["summary"]["late_submission_error_counts"],
             {"access_denied": 1},
         )
-        self.assertEqual(payload["teams"][1]["late_submission_count"], 1)
+        beta_summary = next(team for team in payload["teams"] if team["name"] == "Beta")
+        self.assertEqual(beta_summary["competition_count"], 1)
+        self.assertEqual(beta_summary["late_submission_count"], 1)
         self.assertEqual(
             set(payload["late_submissions"][0]),
             {
@@ -182,6 +184,66 @@ class BuilderTests(unittest.TestCase):
             },
         )
         validate_public_payload(payload)
+
+    def test_late_submissions_keep_the_best_score_per_team_and_competition(self) -> None:
+        class LowerIsBetterSource:
+            competition = Competition(
+                slug="ended-comp",
+                title="Ended competition",
+                url="https://www.kaggle.com/competitions/ended-comp",
+                category="Featured",
+                reward="",
+                deadline=datetime(2026, 6, 1, tzinfo=timezone.utc),
+                api_team_count=100,
+            )
+
+            def list_competitions(self, max_competitions=None):
+                return [self.competition]
+
+            def get_leaderboard(self, competition, normalized_teams):
+                return LeaderboardSnapshot(
+                    team_count=100,
+                    kind="private",
+                    matches=(
+                        LeaderboardEntry(
+                            "Alpha", 10, "0.20", "2026-06-01T00:00:00Z"
+                        ),
+                    ),
+                    score_order="lower",
+                )
+
+        better_older = LateSubmissionEntry(
+            competition_slug="ended-comp",
+            competition_title="Ended competition",
+            competition_url="https://www.kaggle.com/competitions/ended-comp",
+            deadline=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            configured_team_name="Alpha",
+            public_score="0.15",
+            private_score="0.10",
+            submission_date=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        )
+        worse_newer = LateSubmissionEntry(
+            competition_slug="ended-comp",
+            competition_title="Ended competition",
+            competition_url="https://www.kaggle.com/competitions/ended-comp",
+            deadline=datetime(2026, 6, 1, tzinfo=timezone.utc),
+            configured_team_name="Alpha",
+            public_score="0.25",
+            private_score="0.30",
+            submission_date=datetime(2026, 7, 2, tzinfo=timezone.utc),
+        )
+
+        payload = build_leaderboard(
+            LowerIsBetterSource(),
+            Settings(("Alpha",), workers=1),
+            generated_at=datetime(2026, 7, 17, tzinfo=timezone.utc),
+            late_submissions=(better_older, worse_newer),
+            late_submission_account_count=1,
+        )
+
+        self.assertEqual(payload["summary"]["late_submission_count"], 1)
+        self.assertEqual(payload["late_submissions"][0]["private_score"], "0.10")
+        self.assertEqual(payload["teams"][0]["competition_count"], 1)
 
     def test_public_schema_rejects_unapproved_error_categories(self) -> None:
         payload = build_leaderboard(

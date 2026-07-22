@@ -47,7 +47,18 @@ class FixtureConsistencyTests(unittest.TestCase):
             team_late_submissions = [
                 entry for entry in late_submissions if entry["team_name"] == team["name"]
             ]
-            self.assertEqual(team["competition_count"], len(team_entries))
+            official_slugs = {
+                competition["slug"]
+                for competition in competitions
+                if any(entry["team_name"] == team["name"] for entry in competition["entries"])
+            }
+            late_slugs = {
+                entry["competition_slug"] for entry in team_late_submissions
+            }
+            self.assertEqual(
+                team["competition_count"],
+                len(official_slugs | late_slugs),
+            )
             self.assertEqual(
                 team["best_rank"],
                 min((entry["rank"] for entry in team_entries), default=None),

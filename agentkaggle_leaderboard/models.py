@@ -30,6 +30,7 @@ class LeaderboardSnapshot:
     team_count: int
     kind: str
     matches: tuple[LeaderboardEntry, ...]
+    score_order: str = "unknown"
 
 
 @dataclass(frozen=True, slots=True)
