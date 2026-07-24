@@ -5,7 +5,7 @@ description = "Aggregate selected Kaggle teams across public competition leaderb
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "kaggle==2.2.3",
+    "kaggle==2.2.4",
     "kagglesdk==0.1.34",
     "python-dotenv==1.2.2",
 ]
